@@ -1,0 +1,20 @@
+{
+  "name": "fungi-wiki",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Microbial encyclopedia, functional strain database, intelligent search, AI recommendation and synthetic biology design assistant.",
+  "workspaces": [
+    "apps/web",
+    "apps/admin",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:admin": "npm --workspace apps/admin run dev",
+    "dev:api": "cd apps/api && go run ./cmd/server",
+    "build:web": "npm --workspace apps/web run build",
+    "build:admin": "npm --workspace apps/admin run build",
+    "build:api": "cd apps/api && go build ./cmd/server",
+    "test:api": "cd apps/api && go test ./..."
+  }
+}
