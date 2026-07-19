@@ -14,8 +14,10 @@ import (
 	"fungi-wiki/apps/api/internal/functiontag"
 	"fungi-wiki/apps/api/internal/health"
 	"fungi-wiki/apps/api/internal/importjob"
+	"fungi-wiki/apps/api/internal/recommendation"
 	"fungi-wiki/apps/api/internal/searchanalytics"
 	"fungi-wiki/apps/api/internal/species"
+	"fungi-wiki/apps/api/internal/speciesalias"
 	"fungi-wiki/apps/api/internal/speciesfunction"
 )
 
@@ -35,6 +37,8 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	authRepo := auth.NewPostgresRepository(pool)
 	tokenService := auth.NewTokenService(cfg.JWTSecret)
 	searchAnalyticsRepo := searchanalytics.NewPostgresRepository(pool)
+	speciesAliasRepo := speciesalias.NewPostgresRepository(pool)
+	recommendationRepo := recommendation.NewPostgresRepository(pool)
 
 	api := router.Group("/api")
 	{
@@ -44,7 +48,10 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 		speciesfunction.RegisterPublicRoutes(publishedSpecies, speciesFunctionRepo)
 		culturecondition.RegisterPublicRoutes(publishedSpecies, cultureRepo)
 		evidence.RegisterPublicRoutes(publishedSpecies, evidenceRepo)
+		speciesalias.RegisterPublicRoutes(publishedSpecies, speciesAliasRepo)
 		functiontag.RegisterPublicRoutes(api.Group("/function-tags"), functionTagRepo)
+		recommendation.RegisterPublicRoutes(api.Group("/recommendations"), recommendationRepo)
+		recommendation.RegisterFeedbackRoutes(api.Group("/recommendations"), recommendationRepo)
 
 		admin := api.Group("/admin", auth.Authenticate(tokenService), auth.AuthorizeAdmin())
 		{
@@ -52,11 +59,13 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 			speciesfunction.RegisterAdminRoutes(admin.Group("/species"), speciesFunctionRepo)
 			culturecondition.RegisterAdminRoutes(admin.Group("/species"), cultureRepo)
 			evidence.RegisterAdminRoutes(admin.Group("/species"), evidenceRepo)
+			speciesalias.RegisterAdminRoutes(admin.Group("/species"), speciesAliasRepo)
 			functiontag.RegisterAdminRoutes(admin.Group("/function-tags"), functionTagRepo)
 			audit.RegisterAdminRoutes(admin.Group("/audits"), auditRepo)
 			importjob.RegisterAdminRoutes(admin.Group("/imports"), importRepo)
 			auth.RegisterAdminRoutes(admin.Group("/users"), authRepo)
 			searchanalytics.RegisterAdminRoutes(admin.Group("/search-analytics"), searchAnalyticsRepo)
+			recommendation.RegisterAdminRoutes(admin.Group("/recommendations"), recommendationRepo)
 		}
 	}
 

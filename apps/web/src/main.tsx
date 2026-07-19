@@ -34,7 +34,10 @@ type SpeciesFunction = {
 };
 type CultureCondition = { id: string; mediumName: string; temperatureMin: number | null; temperatureMax: number | null; phMin: number | null; phMax: number | null; oxygenRequirement: string; cultureTime: string; notes: string; };
 type Evidence = { id: string; title: string; authors: string; journal: string; publicationYear: number | null; doi: string; pmid: string; sourceUrl: string; conclusion: string; evidenceLevel: string; evidenceScore: number; };
+type SpeciesAlias = { id: string; name: string; type: string; source: string; };
 type FunctionTag = { id: string; name: string; code: string; };
+type RecommendationItem = { id: string; slug: string; latinName: string; chineseName: string; safetyLevel: string; summary: string; score: number; evidenceCount: number; reasons: string[]; riskWarning?: string; };
+type RecommendationResponse = { recordId: string; parsedFunctionTag?: string; items: RecommendationItem[]; disclaimer: string; };
 type SearchFilters = { functionTag: string; temperature: string; ph: string; safetyLevel: string; sourceEnvironment: string; };
 const emptyFilters: SearchFilters = { functionTag: '', temperature: '', ph: '', safetyLevel: '', sourceEnvironment: '' };
 
@@ -50,8 +53,8 @@ function navigateTo(path: string) {
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
-async function request<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`);
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${apiBaseUrl}${path}`, { headers: { 'Content-Type': 'application/json', ...options?.headers }, ...options });
 
   if (!response.ok) {
     const message = await response.json().catch(() => undefined);
@@ -73,10 +76,13 @@ function App() {
   const [speciesFunctions, setSpeciesFunctions] = useState<SpeciesFunction[]>([]);
   const [cultureConditions, setCultureConditions] = useState<CultureCondition[]>([]);
   const [evidences, setEvidences] = useState<Evidence[]>([]);
+  const [aliases, setAliases] = useState<SpeciesAlias[]>([]);
   const [functionTags, setFunctionTags] = useState<FunctionTag[]>([]);
   const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState<SearchFilters>(emptyFilters);
   const [total, setTotal] = useState(0); const [page, setPage] = useState(1); const pageSize = 10; const [sort, setSort] = useState('updated');
+  const [recommendRequirement, setRecommendRequirement] = useState(''); const [recommendFunction, setRecommendFunction] = useState(''); const [recommending, setRecommending] = useState(false); const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
+  const [recommendFeedback, setRecommendFeedback] = useState('');
 
   const stats = useMemo(() => {
     const modelCount = items.filter((item) => item.isModelOrganism).length;
@@ -115,12 +121,14 @@ function App() {
     try {
       const data = await request<Species>(`/api/species/${idOrSlug}`);
       setSelected(data);
-      const [functionData, conditionData, evidenceData] = await Promise.all([
+      const [functionData, conditionData, evidenceData, aliasData] = await Promise.all([
         request<{ items: SpeciesFunction[] }>(`/api/species/${data.slug || data.id}/functions`),
         request<{ items: CultureCondition[] }>(`/api/species/${data.slug || data.id}/culture-conditions`),
         request<{ items: Evidence[] }>(`/api/species/${data.slug || data.id}/evidences`),
+        request<{ items: SpeciesAlias[] }>(`/api/species/${data.slug || data.id}/aliases`),
       ]);
       setSpeciesFunctions(functionData.items); setCultureConditions(conditionData.items); setEvidences(evidenceData.items);
+      setAliases(aliasData.items);
       if (shouldNavigate) {
         navigateTo(`/species/${encodeURIComponent(data.slug || data.id)}`);
       }
@@ -139,6 +147,9 @@ function App() {
   function resetSearch() {
     setQuery(''); setFilters(emptyFilters); setSort('updated'); void loadSpecies('', emptyFilters, 1, 'updated');
   }
+
+  async function submitRecommendation(event: FormEvent) { event.preventDefault(); setRecommending(true); setError(''); setRecommendFeedback(''); try { const payload = { requirement: recommendRequirement, functionTag: recommendFunction || undefined, temperature: filters.temperature ? Number(filters.temperature) : undefined, ph: filters.ph ? Number(filters.ph) : undefined, safetyLevel: filters.safetyLevel || undefined, sourceEnvironment: filters.sourceEnvironment || undefined, limit: 5 }; setRecommendation(await request<RecommendationResponse>('/api/recommendations', { method: 'POST', body: JSON.stringify(payload) })); } catch (err) { setError(err instanceof Error ? err.message : '推荐失败'); } finally { setRecommending(false); } }
+  async function sendRecommendationFeedback(feedbackType: 'helpful' | 'unhelpful') { if (!recommendation) return; const content = window.prompt(feedbackType === 'helpful' ? '哪些内容对你有帮助？（可选）' : '推荐哪里不符合需求？（可选）') ?? ''; try { await request(`/api/recommendations/${recommendation.recordId}/feedback`, { method: 'POST', body: JSON.stringify({ feedbackType, content }) }); setRecommendFeedback(feedbackType); } catch (err) { setError(err instanceof Error ? err.message : '反馈提交失败'); } }
 
   useEffect(() => {
     const handlePopState = () => setRouteSlug(getRouteSpeciesSlug());
@@ -184,6 +195,12 @@ function App() {
             <label><span>来源环境</span><input value={filters.sourceEnvironment} onChange={(e) => setFilters({ ...filters, sourceEnvironment: e.target.value })} placeholder="土壤、海洋、食品…" /></label>
           </div>
         </section>
+      </section>
+
+      <section className="recommendPanel">
+        <div className="recommendIntro"><p className="eyebrow">Explainable Recommendation</p><h2>菌种推荐助手</h2><p>描述你的目标，系统会基于已发布数据、培养条件和文献证据给出可解释候选。</p></div>
+        <form className="recommendForm" onSubmit={submitRecommendation}><textarea required minLength={2} maxLength={2000} value={recommendRequirement} onChange={(e) => setRecommendRequirement(e.target.value)} placeholder="例如：寻找适合 30°C、中性环境的土壤生防菌，用于植物病原菌抑制。" rows={3} /><select value={recommendFunction} onChange={(e) => setRecommendFunction(e.target.value)}><option value="">自动识别功能</option>{functionTags.map((tag) => <option key={tag.id} value={tag.code}>{tag.name}</option>)}</select><button disabled={recommending}>{recommending ? '计算候选中…' : '生成推荐'}</button></form>
+        {recommendation && <div className="recommendResults">{recommendation.items.map((item, index) => <article key={item.id}><div className="recommendRank">#{index + 1}</div><div><div className="recommendTitle"><strong>{item.latinName}</strong><span>{item.score} 分</span></div><small>{item.chineseName || item.slug} · {item.safetyLevel || '安全等级未标注'}</small><p>{item.summary || '暂无摘要'}</p><ul>{item.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>{item.riskWarning && <div className="riskWarning">{item.riskWarning}</div>}<button className="ghost" onClick={() => void loadDetail(item.slug)}>查看菌种详情</button></div></article>)}{!recommendation.items.length && <div className="empty">没有满足当前条件的已发布菌种，请放宽条件或补充数据库。</div>}<p className="disclaimer">{recommendation.disclaimer}</p><div className="recommendFeedback">{recommendFeedback ? <span>感谢反馈，我们会用于改进推荐质量。</span> : <><span>这次推荐有帮助吗？</span><button onClick={() => void sendRecommendationFeedback('helpful')}>👍 有帮助</button><button onClick={() => void sendRecommendationFeedback('unhelpful')}>👎 无帮助</button></>}</div></div>}
       </section>
 
       <section className="stats">
@@ -255,6 +272,8 @@ function App() {
               </div>
 
               <p className="description">{selected.summary || '暂无摘要。'}</p>
+
+              {aliases.length > 0 && <section className="aliasSection"><strong>别名与同义词</strong><div>{aliases.map((alias) => <span key={alias.id}>{alias.name}</span>)}</div></section>}
 
               <section className="functionSection">
                 <h4>功能标签</h4>

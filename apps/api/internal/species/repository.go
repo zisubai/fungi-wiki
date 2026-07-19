@@ -47,7 +47,7 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) (Li
 
 	if params.Query != "" {
 		args = append(args, "%"+strings.TrimSpace(params.Query)+"%")
-		where = append(where, fmt.Sprintf("(slug ILIKE $%d OR latin_name ILIKE $%d OR chinese_name ILIKE $%d OR summary ILIKE $%d)", len(args), len(args), len(args), len(args)))
+		where = append(where, fmt.Sprintf("(slug ILIKE $%d OR latin_name ILIKE $%d OR chinese_name ILIKE $%d OR summary ILIKE $%d OR EXISTS (SELECT 1 FROM species_aliases sa WHERE sa.species_id=species.id AND sa.alias_name ILIKE $%d))", len(args), len(args), len(args), len(args), len(args)))
 	}
 
 	if params.Status != "" {

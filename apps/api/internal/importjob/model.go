@@ -13,6 +13,7 @@ type SpeciesRow struct {
 	IsModelOrganism   bool     `json:"isModelOrganism"`
 	Summary           string   `json:"summary"`
 	FunctionTags      []string `json:"functionTags"`
+	Aliases           []string `json:"aliases"`
 	MediumName        string   `json:"mediumName"`
 	TemperatureMin    *float64 `json:"temperatureMin"`
 	TemperatureMax    *float64 `json:"temperatureMax"`

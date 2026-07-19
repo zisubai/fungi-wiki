@@ -68,6 +68,11 @@ func (repo *PostgresRepository) Import(ctx context.Context, filename string, row
 					return Batch{}, err
 				}
 			}
+			for _, alias := range row.Aliases {
+				if _, err = tx.Exec(ctx, `INSERT INTO species_aliases(species_id,alias_name,alias_type)VALUES($1::uuid,$2,'synonym')`, speciesID, alias); err != nil {
+					return Batch{}, err
+				}
+			}
 			if row.MediumName != "" || row.TemperatureMin != nil || row.TemperatureMax != nil || row.PHMin != nil || row.PHMax != nil || row.OxygenRequirement != "" || row.CultureTime != "" {
 				if _, err = tx.Exec(ctx, `INSERT INTO culture_conditions(species_id,medium_name,temperature_min,temperature_max,ph_min,ph_max,oxygen_requirement,culture_time)VALUES($1::uuid,NULLIF($2,''),$3,$4,$5,$6,NULLIF($7,''),NULLIF($8,''))`, speciesID, row.MediumName, row.TemperatureMin, row.TemperatureMax, row.PHMin, row.PHMax, row.OxygenRequirement, row.CultureTime); err != nil {
 					return Batch{}, err

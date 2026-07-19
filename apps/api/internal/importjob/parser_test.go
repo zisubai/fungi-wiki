@@ -9,13 +9,13 @@ import (
 )
 
 func TestParseCSVWithChineseHeaders(t *testing.T) {
-	content := "标识,拉丁名,中文名,功能标签,最低温度,最高温度,最低ph,最高ph\n" +
-		"bacillus-demo,Bacillus demo,示例菌,biocontrol;促生,20,35,6,8\n"
+	content := "标识,拉丁名,中文名,别名,功能标签,最低温度,最高温度,最低ph,最高ph\n" +
+		"bacillus-demo,Bacillus demo,示例菌,旧名；俗名,biocontrol;促生,20,35,6,8\n"
 	rows, err := Parse("species.csv", strings.NewReader(content))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || rows[0].Slug != "bacillus-demo" || len(rows[0].FunctionTags) != 2 || rows[0].TemperatureMax == nil || *rows[0].TemperatureMax != 35 {
+	if len(rows) != 1 || rows[0].Slug != "bacillus-demo" || len(rows[0].Aliases) != 2 || len(rows[0].FunctionTags) != 2 || rows[0].TemperatureMax == nil || *rows[0].TemperatureMax != 35 {
 		t.Fatalf("unexpected row: %+v", rows)
 	}
 }

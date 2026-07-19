@@ -1,0 +1,19 @@
+import { useEffect, useState } from 'react';
+import { request } from '../../api';
+import { PageHeader } from '../../components/Common';
+import type { RecommendationQuality, SearchReport } from '../../types';
+
+export function SearchAnalytics() {
+  const [days, setDays] = useState(30); const [report, setReport] = useState<SearchReport | null>(null); const [error, setError] = useState('');
+  async function load(nextDays = days) { try { setReport(await request<SearchReport>(`/api/admin/search-analytics?days=${nextDays}`)); } catch (cause) { setError(cause instanceof Error ? cause.message : '搜索分析加载失败'); } }
+  useEffect(() => { void load(); }, []);
+  return <section className="content"><PageHeader title="搜索分析" description="查看用户真实搜索需求和无结果查询，为数据补充与同义词建设提供依据。" action={<select value={days} onChange={(event) => { const value = Number(event.target.value); setDays(value); void load(value); }}><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option></select>} />{error && <div className="message error">{error}</div>}{report ? <><section className="analyticsStats"><article><strong>{report.totalSearches}</strong><span>搜索次数</span></article><article><strong>{report.distinctQueries}</strong><span>不同关键词</span></article><article><strong>{report.noResultSearches}</strong><span>无结果搜索</span></article></section><section className="analyticsGrid"><div className="panel"><div className="panelTitle"><h3>热门关键词</h3></div>{report.popularQueries.map((item) => <div className="queryRow" key={item.query}><strong>{item.query}</strong><span>{item.count} 次 · 平均 {item.averageResults.toFixed(1)} 条</span></div>)}{!report.popularQueries.length && <div className="empty">暂无关键词搜索记录。</div>}</div><div className="panel"><div className="panelTitle"><h3>无结果关键词</h3></div>{report.noResultQueries.map((item) => <div className="queryRow warning" key={item.query}><strong>{item.query}</strong><span>{item.count} 次</span></div>)}{!report.noResultQueries.length && <div className="empty">暂无无结果关键词。</div>}</div></section></> : <div className="panel placeholderPanel">分析数据加载中…</div>}</section>;
+}
+
+export function RecommendationQualityPage() {
+  const [report, setReport] = useState<RecommendationQuality | null>(null); const [error, setError] = useState('');
+  async function load() { try { setReport(await request<RecommendationQuality>('/api/admin/recommendations')); } catch (cause) { setError(cause instanceof Error ? cause.message : '推荐质量加载失败'); } }
+  useEffect(() => { void load(); }, []);
+  const feedbackTotal = (report?.helpful ?? 0) + (report?.unhelpful ?? 0); const helpfulRate = feedbackTotal ? Math.round((report!.helpful / feedbackTotal) * 100) : 0;
+  return <section className="content"><PageHeader title="推荐质量" description="跟踪推荐需求、候选结果、风险等级和用户有用性反馈。" action={<button className="primary" onClick={() => void load()}>刷新</button>} />{error && <div className="message error">{error}</div>}{report ? <><section className="analyticsStats"><article><strong>{report.total}</strong><span>推荐次数</span></article><article><strong>{feedbackTotal}</strong><span>收到反馈</span></article><article><strong>{helpfulRate}%</strong><span>有帮助率</span></article></section><div className="panel recommendationAuditList">{report.records.map((record) => <article key={record.id}><div className="qualityHeader"><div><strong>{record.requirement}</strong><small>{new Date(record.createdAt).toLocaleString()} · {record.modelName}</small></div><span className={record.riskLevel === 'low' ? 'countSuccess' : 'countWarning'}>{record.riskLevel}</span></div><div className="candidateSummary">{record.items.map((item) => <span key={item.latinName}>{item.latinName} · {item.score} 分</span>)}</div><div className="qualityFeedback">👍 {record.helpfulCount}　👎 {record.unhelpfulCount}</div></article>)}{!report.records.length && <div className="empty">暂无推荐记录。</div>}</div></> : <div className="panel placeholderPanel">推荐质量加载中…</div>}</section>;
+}

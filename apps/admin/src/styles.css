@@ -27,6 +27,13 @@
 .importResult { margin-top: 20px; }
 @media (max-width: 960px) { .importGrid { grid-template-columns: 1fr; } }
 
+.recommendationAuditList > article { border-bottom: 1px solid #eef2f1; padding: 18px 0; }
+.qualityHeader { align-items: flex-start; display: flex; justify-content: space-between; }
+.qualityHeader small { color: #718079; display: block; margin-top: 6px; }
+.candidateSummary { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.candidateSummary span { background: #eef5f2; border-radius: 999px; color: #36594e; font-size: 12px; padding: 6px 9px; }
+.qualityFeedback { color: #718079; font-size: 13px; margin-top: 12px; }
+
 * {
   box-sizing: border-box;
 }

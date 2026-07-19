@@ -14,7 +14,10 @@
     "dev:api": "cd apps/api && go run ./cmd/server",
     "build:web": "npm --workspace apps/web run build",
     "build:admin": "npm --workspace apps/admin run build",
+    "test:admin": "npm --workspace apps/admin run test",
     "build:api": "cd apps/api && go build ./cmd/server",
-    "test:api": "cd apps/api && go test ./..."
+    "test:api": "cd apps/api && go test ./...",
+    "verify:frontend": "npm run test:admin && npm run build:web && npm run build:admin",
+    "verify": "npm run verify:frontend && npm run test:api && npm run build:api"
   }
 }

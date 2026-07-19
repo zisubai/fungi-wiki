@@ -19,6 +19,7 @@ var headerAliases = map[string]string{
 	"strain_number": "strain_number", "菌株编号": "strain_number", "source_environment": "source_environment", "来源环境": "source_environment",
 	"safety_level": "safety_level", "安全等级": "safety_level", "is_model_organism": "is_model_organism", "模式菌": "is_model_organism",
 	"summary": "summary", "摘要": "summary", "function_tags": "function_tags", "功能标签": "function_tags", "medium_name": "medium_name", "培养基": "medium_name",
+	"aliases": "aliases", "别名": "aliases", "同义词": "aliases",
 	"temperature_min": "temperature_min", "最低温度": "temperature_min", "temperature_max": "temperature_max", "最高温度": "temperature_max",
 	"ph_min": "ph_min", "最低ph": "ph_min", "ph_max": "ph_max", "最高ph": "ph_max", "oxygen_requirement": "oxygen_requirement", "氧需求": "oxygen_requirement",
 	"culture_time": "culture_time", "培养时间": "culture_time",
@@ -80,6 +81,13 @@ func Parse(filename string, reader io.Reader) ([]SpeciesRow, error) {
 			for _, tag := range strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ';' || r == '，' || r == '；' }) {
 				if tag = strings.TrimSpace(tag); tag != "" {
 					row.FunctionTags = append(row.FunctionTags, tag)
+				}
+			}
+		}
+		if value := values["aliases"]; value != "" {
+			for _, alias := range strings.FieldsFunc(value, func(r rune) bool { return r == ';' || r == '；' || r == '|' }) {
+				if alias = strings.TrimSpace(alias); alias != "" {
+					row.Aliases = append(row.Aliases, alias)
 				}
 			}
 		}

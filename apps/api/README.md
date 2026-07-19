@@ -110,6 +110,8 @@ GET /api/species?functionTag=biocontrol&temperature=30&ph=7.0&safetyLevel=BSL-1&
 
 带关键词或筛选条件的公开搜索会写入 `search_logs`，记录查询、筛选条件和结果数量。
 
+关键词搜索同时匹配菌种 Slug、拉丁名、中文名、摘要以及别名/同义词。
+
 用户端列表默认只返回 `published` 状态的菌种。
 
 ## 运营端接口
@@ -209,6 +211,25 @@ PUT /api/admin/species/{idOrSlug}/functions
 
 `PUT` 使用事务整体替换当前菌种的功能关联；传入空数组可以清空关联。
 
+## 菌种别名接口
+
+```text
+GET /api/species/{idOrSlug}/aliases
+GET /api/admin/species/{idOrSlug}/aliases
+PUT /api/admin/species/{idOrSlug}/aliases
+```
+
+更新示例：
+
+```json
+{
+  "items": [
+    { "name": "历史拉丁名", "type": "former_name", "source": "文献来源" },
+    { "name": "常用中文名", "type": "common_name" }
+  ]
+}
+```
+
 ## 培养条件接口
 
 ```text
@@ -260,7 +281,7 @@ GET  /api/admin/imports?limit=20
 必需表头为 `slug` 和 `latin_name`，也支持中文表头“标识”和“拉丁名”。可选表头：
 
 ```text
-chinese_name,strain_number,source_environment,safety_level,is_model_organism,
+chinese_name,aliases,strain_number,source_environment,safety_level,is_model_organism,
 summary,function_tags,medium_name,temperature_min,temperature_max,
 ph_min,ph_max,oxygen_requirement,culture_time
 ```
@@ -274,3 +295,45 @@ GET /api/admin/search-analytics?days=30
 ```
 
 返回搜索次数、不同关键词数、无结果搜索数、热门关键词和无结果关键词。`days` 支持 1–365 天。
+
+## 可解释菌种推荐
+
+```text
+POST /api/recommendations
+```
+
+请求示例：
+
+```json
+{
+  "requirement": "寻找适合 30°C、中性环境的土壤生防菌",
+  "functionTag": "biocontrol",
+  "temperature": 30,
+  "ph": 7,
+  "safetyLevel": "BSL-1",
+  "sourceEnvironment": "土壤",
+  "limit": 5
+}
+```
+
+当前版本为 `rules-v1`：从已发布菌种中按结构化条件召回，结合功能匹配、数据质量、证据数量和证据评分进行排序，并返回推荐理由与生物安全提示。若未传 `functionTag`，会尝试从需求文字中识别已有功能标签。
+
+每次推荐都会写入 `recommendation_records`，保存需求、解析意图、候选结果、模型版本和风险等级。推荐仅用于候选初筛，不替代专家判断和实验验证。
+
+推荐反馈与质量接口：
+
+```text
+POST /api/recommendations/{recordId}/feedback
+GET  /api/admin/recommendations
+```
+
+反馈请求示例：
+
+```json
+{
+  "feedbackType": "helpful",
+  "content": "推荐理由清晰，候选符合预期"
+}
+```
+
+`feedbackType` 支持 `helpful` 和 `unhelpful`。运营端质量接口返回推荐总量、有帮助/无帮助数量、风险等级、候选结果及单条推荐反馈统计。

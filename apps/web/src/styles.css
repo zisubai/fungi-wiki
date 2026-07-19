@@ -9,6 +9,7 @@
 .functionTags { display: flex; flex-wrap: wrap; gap: 8px; }
 .functionTags span { padding: 6px 10px; border-radius: 999px; background: #e7f2e9; color: #28603a; font-size: 13px; }
 .functionTags small { color: #7a887f; }
+.aliasSection { margin-top: 16px; }.aliasSection > strong { color: #486354; font-size: 14px; }.aliasSection div { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }.aliasSection span { background: #f0f4f2; border-radius: 999px; color: #607067; font-size: 12px; padding: 5px 9px; }
 .conditionCard { display: grid; gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); background: #f7faf8; border-radius: 12px; padding: 14px; }
 .conditionCard strong { grid-column: 1 / -1; }
 .conditionCard span { color: #607067; font-size: 13px; }
@@ -16,6 +17,10 @@
 .evidenceCards article { border-left: 3px solid #78a886; background: #f7faf8; padding: 12px 14px; }
 .evidenceCards p { font-size: 14px; margin: 7px 0; }
 .evidenceCards a { color: #28603a; }
+
+.recommendFeedback { align-items: center; display: flex; gap: 10px; justify-content: center; }
+.recommendFeedback span { color: #d5e9e2; font-size: 13px; }
+.recommendFeedback button { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); border-radius: 9px; color: white; padding: 8px 11px; }
 
 * {
   box-sizing: border-box;
@@ -27,9 +32,11 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
+.recommendPanel { background: #153b34; border-radius: 26px; color: white; margin-top: 32px; padding: 28px; }.recommendIntro h2 { font-size: 30px; margin: 4px 0 8px; }.recommendIntro > p:last-child { color: #bcd5cd; margin: 0; }.recommendForm { display: grid; gap: 12px; grid-template-columns: 1fr 190px 130px; margin-top: 20px; }.recommendForm textarea,.recommendForm select { background: white; border: 0; border-radius: 12px; padding: 13px; resize: vertical; }.recommendForm button { background: #52b891; border: 0; border-radius: 12px; color: #092820; font-weight: 800; }.recommendResults { display: grid; gap: 12px; margin-top: 20px; }.recommendResults article { background: white; border-radius: 16px; color: #17342f; display: grid; gap: 14px; grid-template-columns: 42px 1fr; padding: 18px; }.recommendRank { align-items: center; background: #e8f6f1; border-radius: 50%; color: #16735f; display: flex; font-weight: 800; height: 38px; justify-content: center; }.recommendTitle { display: flex; justify-content: space-between; }.recommendTitle span { color: #16735f; font-weight: 800; }.recommendResults p { color: #637973; margin: 8px 0; }.recommendResults ul { color: #486354; font-size: 13px; margin: 8px 0; padding-left: 20px; }.riskWarning { background: #fff1f0; border-radius: 8px; color: #a8071a; font-size: 13px; margin: 8px 0; padding: 9px; }.recommendResults .disclaimer { color: #bcd5cd; font-size: 12px; text-align: center; }
 
 .filterPanel { background: rgba(255,255,255,.72); border: 1px solid #dcebe6; border-radius: 18px; margin-top: 16px; padding: 18px; max-width: 980px; }
 .filterTitle { align-items: baseline; display: flex; gap: 12px; margin-bottom: 14px; }
@@ -309,6 +316,7 @@ dd {
     height: 52px;
   }
   .filterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .recommendForm { grid-template-columns: 1fr; }.recommendForm button { min-height: 48px; }
 }
 
 .backLink {

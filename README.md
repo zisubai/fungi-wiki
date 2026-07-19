@@ -39,12 +39,15 @@ scripts/               开发和数据库脚本
 - 菌种百科列表和详情
 - 菌种、功能标签运营管理
 - 菌种与功能标签关联
+- 菌种别名、历史名称和同义词维护与搜索
 - 培养基、温度、pH、盐度和氧需求维护
 - 文献来源、实验结论、证据等级和评分维护
 - 草稿、待审核、已发布、已归档状态管理
 - 提交审核、审核通过和驳回流程
 - 按关键词、功能、温度、pH、安全等级和来源环境联合筛选
 - 搜索结果分页、排序、搜索日志和运营端搜索分析
+- 基于功能、培养条件、数据质量与文献证据的可解释菌种推荐
+- 推荐有用性反馈与运营端推荐质量看板
 - CSV / Excel 批量导入、逐行错误反馈和导入批次记录
 - 运营端登录、JWT 会话和运营/专家/管理员角色权限
 - 公开接口仅展示已发布数据
@@ -134,10 +137,16 @@ GET /api/species?functionTag=biocontrol&temperature=30&ph=7&safetyLevel=BSL-1&so
 
 ```bash
 npm run test:api
+npm run test:admin
 npm run build:api
 npm run build:web
 npm run build:admin
+npm run verify
 ```
+
+`npm run verify` 会执行运营端测试、前后端构建和 Go 测试，适合提交代码前一次性检查。
+
+GitHub Actions 会在每次 push 和 pull request 时自动执行运营端测试、Go 测试以及三端生产构建，配置位于 `.github/workflows/ci.yml`。
 
 ## 相关文档
 
