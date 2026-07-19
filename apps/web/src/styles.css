@@ -26,9 +26,17 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
+
+.filterPanel { background: rgba(255,255,255,.72); border: 1px solid #dcebe6; border-radius: 18px; margin-top: 16px; padding: 18px; max-width: 980px; }
+.filterTitle { align-items: baseline; display: flex; gap: 12px; margin-bottom: 14px; }
+.filterTitle span { color: #73837e; font-size: 13px; }
+.filterGrid { display: grid; gap: 12px; grid-template-columns: repeat(5, minmax(120px, 1fr)); }
+.filterGrid label span { color: #637973; display: block; font-size: 13px; margin-bottom: 6px; }
+.filterGrid input, .filterGrid select { background: white; border: 1px solid #c9ded7; border-radius: 10px; min-width: 0; padding: 10px; width: 100%; }
 
 button {
   cursor: pointer;
@@ -295,6 +303,7 @@ dd {
   .searchBox button {
     height: 52px;
   }
+  .filterGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .backLink {

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -41,11 +42,26 @@ func (handler *Handler) ListAll(ctx *gin.Context) {
 }
 
 func (handler *Handler) list(ctx *gin.Context, status string) {
+	temperature, err := parseOptionalFloat(ctx.Query("temperature"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{"message": "temperature must be a number"})
+		return
+	}
+	ph, err := parseOptionalFloat(ctx.Query("ph"))
+	if err != nil || ph != nil && (*ph < 0 || *ph > 14) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"message": "ph must be a number between 0 and 14"})
+		return
+	}
 	items, err := handler.repo.List(ctx.Request.Context(), ListParams{
-		Query:  ctx.Query("q"),
-		Status: status,
-		Limit:  parseInt(ctx.Query("limit"), 20),
-		Offset: parseInt(ctx.Query("offset"), 0),
+		Query:             ctx.Query("q"),
+		Status:            status,
+		FunctionTag:       ctx.Query("functionTag"),
+		Temperature:       temperature,
+		PH:                ph,
+		SafetyLevel:       ctx.Query("safetyLevel"),
+		SourceEnvironment: ctx.Query("sourceEnvironment"),
+		Limit:             parseInt(ctx.Query("limit"), 20),
+		Offset:            parseInt(ctx.Query("offset"), 0),
 	})
 	if err != nil {
 		respondError(ctx, err)
@@ -53,6 +69,17 @@ func (handler *Handler) list(ctx *gin.Context, status string) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+func parseOptionalFloat(value string) (*float64, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
 }
 
 func (handler *Handler) Get(ctx *gin.Context) {

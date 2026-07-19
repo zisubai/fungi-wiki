@@ -54,6 +54,45 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) ([]
 		where = append(where, fmt.Sprintf("status = $%d", len(args)))
 	}
 
+	if params.FunctionTag != "" {
+		args = append(args, params.FunctionTag)
+		where = append(where, fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM species_functions sf
+			JOIN function_tags ft ON ft.id = sf.function_tag_id
+			WHERE sf.species_id = species.id AND (ft.id::text = $%d OR ft.code = $%d)
+		)`, len(args), len(args)))
+	}
+
+	if params.Temperature != nil {
+		args = append(args, *params.Temperature)
+		where = append(where, fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM culture_conditions cc WHERE cc.species_id = species.id
+			AND (cc.temperature_min IS NOT NULL OR cc.temperature_max IS NOT NULL)
+			AND (cc.temperature_min IS NULL OR cc.temperature_min <= $%d)
+			AND (cc.temperature_max IS NULL OR cc.temperature_max >= $%d)
+		)`, len(args), len(args)))
+	}
+
+	if params.PH != nil {
+		args = append(args, *params.PH)
+		where = append(where, fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM culture_conditions cc WHERE cc.species_id = species.id
+			AND (cc.ph_min IS NOT NULL OR cc.ph_max IS NOT NULL)
+			AND (cc.ph_min IS NULL OR cc.ph_min <= $%d)
+			AND (cc.ph_max IS NULL OR cc.ph_max >= $%d)
+		)`, len(args), len(args)))
+	}
+
+	if params.SafetyLevel != "" {
+		args = append(args, strings.TrimSpace(params.SafetyLevel))
+		where = append(where, fmt.Sprintf("safety_level ILIKE $%d", len(args)))
+	}
+
+	if params.SourceEnvironment != "" {
+		args = append(args, "%"+strings.TrimSpace(params.SourceEnvironment)+"%")
+		where = append(where, fmt.Sprintf("source_environment ILIKE $%d", len(args)))
+	}
+
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
 		SELECT id::text, slug, latin_name, COALESCE(chinese_name, ''), COALESCE(strain_number, ''),

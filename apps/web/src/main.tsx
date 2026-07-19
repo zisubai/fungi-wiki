@@ -31,6 +31,9 @@ type SpeciesFunction = {
 };
 type CultureCondition = { id: string; mediumName: string; temperatureMin: number | null; temperatureMax: number | null; phMin: number | null; phMax: number | null; oxygenRequirement: string; cultureTime: string; notes: string; };
 type Evidence = { id: string; title: string; authors: string; journal: string; publicationYear: number | null; doi: string; pmid: string; sourceUrl: string; conclusion: string; evidenceLevel: string; evidenceScore: number; };
+type FunctionTag = { id: string; name: string; code: string; };
+type SearchFilters = { functionTag: string; temperature: string; ph: string; safetyLevel: string; sourceEnvironment: string; };
+const emptyFilters: SearchFilters = { functionTag: '', temperature: '', ph: '', safetyLevel: '', sourceEnvironment: '' };
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
@@ -67,6 +70,9 @@ function App() {
   const [speciesFunctions, setSpeciesFunctions] = useState<SpeciesFunction[]>([]);
   const [cultureConditions, setCultureConditions] = useState<CultureCondition[]>([]);
   const [evidences, setEvidences] = useState<Evidence[]>([]);
+  const [functionTags, setFunctionTags] = useState<FunctionTag[]>([]);
+  const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState<SearchFilters>(emptyFilters);
 
   const stats = useMemo(() => {
     const modelCount = items.filter((item) => item.isModelOrganism).length;
@@ -74,15 +80,17 @@ function App() {
     return { modelCount, safetyLevelCount: safetyLevels.size };
   }, [items]);
 
-  async function loadSpecies(search = query) {
+  async function loadSpecies(search = query, nextFilters = filters) {
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.set('q', search.trim());
+      Object.entries(nextFilters).forEach(([key, value]) => { if (value.trim()) params.set(key, value.trim()); });
       const data = await request<ListResponse>(`/api/species?${params.toString()}`);
       setItems(data.items);
       setSubmittedQuery(search.trim());
+      setAppliedFilters(nextFilters);
       if (!routeSlug && data.items.length > 0) {
         await loadDetail(data.items[0].slug || data.items[0].id, false);
       } else if (!routeSlug) {
@@ -122,6 +130,10 @@ function App() {
     void loadSpecies(query);
   }
 
+  function resetSearch() {
+    setQuery(''); setFilters(emptyFilters); void loadSpecies('', emptyFilters);
+  }
+
   useEffect(() => {
     const handlePopState = () => setRouteSlug(getRouteSpeciesSlug());
     window.addEventListener('popstate', handlePopState);
@@ -130,7 +142,10 @@ function App() {
 
   useEffect(() => {
     void loadSpecies('');
+    void request<{ items: FunctionTag[] }>('/api/function-tags?limit=200').then((data) => setFunctionTags(data.items)).catch(() => undefined);
   }, []);
+
+  const activeFilterCount = Object.values(appliedFilters).filter(Boolean).length;
 
   useEffect(() => {
     if (routeSlug) {
@@ -153,6 +168,16 @@ function App() {
           />
           <button disabled={loading}>{loading ? '搜索中...' : '搜索'}</button>
         </form>
+        <section className="filterPanel">
+          <div className="filterTitle"><strong>多条件筛选</strong><span>所有已填写条件同时满足</span></div>
+          <div className="filterGrid">
+            <label><span>功能标签</span><select value={filters.functionTag} onChange={(e) => setFilters({ ...filters, functionTag: e.target.value })}><option value="">全部功能</option>{functionTags.map((tag) => <option key={tag.id} value={tag.code}>{tag.name}</option>)}</select></label>
+            <label><span>适宜温度 °C</span><input type="number" step="0.1" value={filters.temperature} onChange={(e) => setFilters({ ...filters, temperature: e.target.value })} placeholder="例如 30" /></label>
+            <label><span>适宜 pH</span><input type="number" min="0" max="14" step="0.1" value={filters.ph} onChange={(e) => setFilters({ ...filters, ph: e.target.value })} placeholder="例如 7.0" /></label>
+            <label><span>安全等级</span><select value={filters.safetyLevel} onChange={(e) => setFilters({ ...filters, safetyLevel: e.target.value })}><option value="">全部等级</option><option value="BSL-1">BSL-1</option><option value="BSL-2">BSL-2</option><option value="BSL-3">BSL-3</option><option value="BSL-4">BSL-4</option></select></label>
+            <label><span>来源环境</span><input value={filters.sourceEnvironment} onChange={(e) => setFilters({ ...filters, sourceEnvironment: e.target.value })} placeholder="土壤、海洋、食品…" /></label>
+          </div>
+        </section>
       </section>
 
       <section className="stats">
@@ -177,9 +202,9 @@ function App() {
           <div className="panelTitle">
             <div>
               <h2>菌种列表</h2>
-              <p>{submittedQuery ? `搜索结果：${submittedQuery}` : '展示已发布菌种'}</p>
+              <p>{submittedQuery || activeFilterCount ? `${submittedQuery ? `关键词“${submittedQuery}” · ` : ''}${activeFilterCount} 个筛选条件` : '展示已发布菌种'}</p>
             </div>
-            <button className="ghost" onClick={() => { setQuery(''); void loadSpecies(''); }}>重置</button>
+            <button className="ghost" onClick={resetSearch}>重置</button>
           </div>
 
           <div className="speciesList">

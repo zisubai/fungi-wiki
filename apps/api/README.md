@@ -28,6 +28,12 @@ postgres://fungi:fungi@localhost:55432/fungi_wiki?sslmode=disable
 apps/api/migrations/001_init_schema.sql
 ```
 
+已有数据库升级到多条件搜索索引时执行：
+
+```bash
+docker exec -i fungi-wiki-postgres psql -U fungi -d fungi_wiki < apps/api/migrations/002_search_indexes.sql
+```
+
 ## 启动 API
 
 ```bash
@@ -48,6 +54,21 @@ GET /api/species
 GET /api/species?q=促生
 GET /api/species/bacillus-subtilis
 ```
+
+用户端列表支持多条件联合筛选：
+
+```text
+GET /api/species?functionTag=biocontrol&temperature=30&ph=7.0&safetyLevel=BSL-1&sourceEnvironment=土壤
+```
+
+- `functionTag`：功能标签编码或 UUID。
+- `temperature`：目标培养温度；匹配温度范围覆盖该值的菌种。
+- `ph`：目标 pH，范围为 0–14；匹配 pH 范围覆盖该值的菌种。
+- `safetyLevel`：安全等级，精确匹配且不区分大小写。
+- `sourceEnvironment`：来源环境，模糊匹配。
+- `q`：名称、Slug 或摘要关键词。
+
+多个参数同时提供时使用 AND 联合筛选。
 
 用户端列表默认只返回 `published` 状态的菌种。
 

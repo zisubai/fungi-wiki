@@ -29,10 +29,15 @@ type Species struct {
 }
 
 type ListParams struct {
-	Query  string
-	Status string
-	Limit  int
-	Offset int
+	Query             string
+	Status            string
+	FunctionTag       string
+	Temperature       *float64
+	PH                *float64
+	SafetyLevel       string
+	SourceEnvironment string
+	Limit             int
+	Offset            int
 }
 
 type CreateInput struct {
