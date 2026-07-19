@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 type SpeciesStatus = 'draft' | 'pending_review' | 'published' | 'archived';
-type ActiveMenu = '菌种管理' | '功能标签' | '文献证据' | '数据审核' | '推荐质量';
+type ActiveMenu = '菌种管理' | '功能标签' | '批量导入' | '文献证据' | '数据审核' | '搜索分析' | '账号管理' | '推荐质量';
 
 type Species = {
   id: string;
@@ -72,13 +72,18 @@ type AuditRecord = {
   id: string; entityId: string; entityName: string; action: string; status: string;
   comment: string; submittedAt: string; reviewedAt?: string;
 };
+type ImportRowResult = { rowNumber: number; slug: string; status: string; errors?: string[]; };
+type ImportBatch = { id: string; sourceFilename: string; totalRows: number; successRows: number; failedRows: number; status: string; createdAt: string; rows?: ImportRowResult[]; };
+type AuthUser = { id: string; email: string; displayName: string; role: 'operator' | 'expert' | 'admin'; status?: string; };
+type LoginResponse = { token: string; expiresAt: string; user: AuthUser; };
+type SearchReport = { days: number; totalSearches: number; noResultSearches: number; distinctQueries: number; popularQueries: { query: string; count: number; averageResults: number }[]; noResultQueries: { query: string; count: number }[]; };
 
 type ListResponse<T> = {
   items: T[];
 };
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
-const menus: ActiveMenu[] = ['菌种管理', '功能标签', '文献证据', '数据审核', '推荐质量'];
+const menus: ActiveMenu[] = ['菌种管理', '功能标签', '批量导入', '文献证据', '数据审核', '搜索分析', '账号管理', '推荐质量'];
 
 const emptySpeciesForm: SpeciesPayload = {
   slug: '',
@@ -130,12 +135,15 @@ function toTagPayload(tag: FunctionTag): FunctionTagPayload {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const isFormData = options?.body instanceof FormData;
+  const token = localStorage.getItem('fungi_admin_token');
   const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { ...(!isFormData ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options?.headers },
     ...options,
   });
 
   if (!response.ok) {
+    if (response.status === 401 && path !== '/api/auth/login') { localStorage.removeItem('fungi_admin_token'); window.dispatchEvent(new Event('auth-expired')); }
     const message = await response.json().catch(() => undefined);
     throw new Error(message?.message ?? `请求失败：${response.status}`);
   }
@@ -159,23 +167,60 @@ function statusLabel(status: SpeciesStatus) {
 
 function App() {
   const [activeMenu, setActiveMenu] = useState<ActiveMenu>('菌种管理');
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  useEffect(() => { const token = localStorage.getItem('fungi_admin_token'); if (!token) { setCheckingAuth(false); return; } void request<AuthUser>('/api/auth/me').then(setUser).catch(() => setUser(null)).finally(() => setCheckingAuth(false)); }, []);
+  useEffect(() => { const expire = () => setUser(null); window.addEventListener('auth-expired', expire); return () => window.removeEventListener('auth-expired', expire); }, []);
+  if (checkingAuth) return <main className="loginPage"><div className="loginCard">正在验证登录状态…</div></main>;
+  if (!user) return <LoginPage onLogin={setUser} />;
+  function logout() { localStorage.removeItem('fungi_admin_token'); setUser(null); }
+  const visibleMenus = user.role === 'admin' ? menus : user.role === 'expert' ? (['数据审核'] as ActiveMenu[]) : menus.filter((menu) => !['数据审核', '账号管理'].includes(menu));
+  const currentMenu = visibleMenus.includes(activeMenu) ? activeMenu : visibleMenus[0];
 
   return (
     <main className="layout">
       <aside className="sidebar">
         <h1>运营端</h1>
-        {menus.map((menu) => (
-          <button className={menu === activeMenu ? 'active' : ''} key={menu} onClick={() => setActiveMenu(menu)}>{menu}</button>
+        <div className="currentUser"><strong>{user.displayName}</strong><span>{user.email} · {user.role}</span></div>
+        {visibleMenus.map((menu) => (
+          <button className={menu === currentMenu ? 'active' : ''} key={menu} onClick={() => setActiveMenu(menu)}>{menu}</button>
         ))}
+        <button className="logoutButton" onClick={logout}>退出登录</button>
       </aside>
 
-      {activeMenu === '菌种管理' && <SpeciesManagement />}
-      {activeMenu === '功能标签' && <FunctionTagManagement />}
-      {activeMenu === '文献证据' && <EvidenceManagement />}
-      {activeMenu === '数据审核' && <AuditManagement />}
-      {activeMenu === '推荐质量' && <Placeholder title={activeMenu} />}
+      {currentMenu === '菌种管理' && <SpeciesManagement />}
+      {currentMenu === '功能标签' && <FunctionTagManagement />}
+      {currentMenu === '批量导入' && <ImportManagement />}
+      {currentMenu === '文献证据' && <EvidenceManagement />}
+      {currentMenu === '数据审核' && <AuditManagement />}
+      {currentMenu === '搜索分析' && <SearchAnalytics />}
+      {currentMenu === '账号管理' && <UserManagement />}
+      {currentMenu === '推荐质量' && <Placeholder title={currentMenu} />}
     </main>
   );
+}
+
+function LoginPage({ onLogin }: { onLogin: (user: AuthUser) => void }) {
+  const [email, setEmail] = useState('admin@fungi.local'); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [loading, setLoading] = useState(false);
+  async function login(event: FormEvent) { event.preventDefault(); setLoading(true); setError(''); try { const data = await request<LoginResponse>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }); localStorage.setItem('fungi_admin_token', data.token); onLogin(data.user); } catch (e) { setError(e instanceof Error ? e.message : '登录失败'); } finally { setLoading(false); } }
+  return <main className="loginPage"><form className="loginCard" onSubmit={login}><p className="eyebrow">Fungi Wiki Admin</p><h1>登录运营端</h1><p>使用运营、专家或管理员账号登录。</p>{error && <div className="message error">{error}</div>}<label><span>邮箱</span><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label><label><span>密码</span><input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label><button className="primary full" disabled={loading}>{loading ? '登录中…' : '登录'}</button></form></main>;
+}
+
+function SearchAnalytics() {
+  const [days, setDays] = useState(30); const [report, setReport] = useState<SearchReport | null>(null); const [error, setError] = useState('');
+  async function load(nextDays = days) { try { setReport(await request<SearchReport>(`/api/admin/search-analytics?days=${nextDays}`)); } catch (e) { setError(e instanceof Error ? e.message : '搜索分析加载失败'); } }
+  useEffect(() => { void load(); }, []);
+  return <section className="content"><PageHeader title="搜索分析" description="查看用户真实搜索需求和无结果查询，为数据补充与同义词建设提供依据。" action={<select value={days} onChange={(e) => { const value = Number(e.target.value); setDays(value); void load(value); }}><option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option></select>} />{error && <div className="message error">{error}</div>}{report ? <><section className="analyticsStats"><article><strong>{report.totalSearches}</strong><span>搜索次数</span></article><article><strong>{report.distinctQueries}</strong><span>不同关键词</span></article><article><strong>{report.noResultSearches}</strong><span>无结果搜索</span></article></section><section className="analyticsGrid"><div className="panel"><div className="panelTitle"><h3>热门关键词</h3></div>{report.popularQueries.map((item) => <div className="queryRow" key={item.query}><strong>{item.query}</strong><span>{item.count} 次 · 平均 {item.averageResults.toFixed(1)} 条</span></div>)}{!report.popularQueries.length && <div className="empty">暂无关键词搜索记录。</div>}</div><div className="panel"><div className="panelTitle"><h3>无结果关键词</h3></div>{report.noResultQueries.map((item) => <div className="queryRow warning" key={item.query}><strong>{item.query}</strong><span>{item.count} 次</span></div>)}{!report.noResultQueries.length && <div className="empty">暂无无结果关键词。</div>}</div></section></> : <div className="panel placeholderPanel">分析数据加载中…</div>}</section>;
+}
+
+function UserManagement() {
+  const [items, setItems] = useState<AuthUser[]>([]); const [error, setError] = useState(''); const [notice, setNotice] = useState('');
+  const [form, setForm] = useState({ email: '', password: '', displayName: '', role: 'operator' as AuthUser['role'] });
+  async function load() { try { const data = await request<ListResponse<AuthUser>>('/api/admin/users'); setItems(data.items); } catch (e) { setError(e instanceof Error ? e.message : '账号加载失败'); } }
+  useEffect(() => { void load(); }, []);
+  async function submit(event: FormEvent) { event.preventDefault(); setError(''); try { await request('/api/admin/users', { method: 'POST', body: JSON.stringify(form) }); setNotice('账号已创建'); setForm({ email: '', password: '', displayName: '', role: 'operator' }); await load(); } catch (e) { setError(e instanceof Error ? e.message : '创建失败'); } }
+  const roleLabel = { operator: '运营', expert: '专家', admin: '管理员' };
+  return <section className="content"><PageHeader title="账号管理" description="创建运营、专家和管理员账号，并按角色控制操作权限。" /><Messages error={error} notice={notice} /><section className="mainGrid"><div className="panel tablePanel"><div className="panelTitle"><h3>账号列表</h3><span>{items.length} 个</span></div><div className="tableWrap"><table><thead><tr><th>姓名</th><th>邮箱</th><th>角色</th><th>状态</th></tr></thead><tbody>{items.map((user) => <tr key={user.id}><td><strong>{user.displayName}</strong></td><td>{user.email}</td><td>{roleLabel[user.role]}</td><td>{'status' in user ? String((user as AuthUser & { status: string }).status) : 'active'}</td></tr>)}</tbody></table></div></div><form className="panel formPanel" onSubmit={submit}><div className="panelTitle"><h3>创建账号</h3></div><label><span>显示名称 *</span><input required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label><label><span>邮箱 *</span><input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label><label><span>初始密码 *</span><input type="password" minLength={8} required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="至少 8 位" /></label><label><span>角色</span><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as AuthUser['role'] })}><option value="operator">运营：维护数据</option><option value="expert">专家：审核数据</option><option value="admin">管理员：全部权限</option></select></label><button className="primary full">创建账号</button></form></section></section>;
 }
 
 function PageHeader({ title, description, action }: { title: string; description: string; action?: React.ReactNode }) {
@@ -553,6 +598,23 @@ function FunctionTagManagement() {
       </section>
     </section>
   );
+}
+
+function ImportManagement() {
+  const [file, setFile] = useState<File | null>(null); const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState<ImportBatch | null>(null); const [history, setHistory] = useState<ImportBatch[]>([]);
+  const [error, setError] = useState(''); const [notice, setNotice] = useState('');
+  async function loadHistory() { try { const data = await request<ListResponse<ImportBatch>>('/api/admin/imports?limit=20'); setHistory(data.items); } catch (e) { setError(e instanceof Error ? e.message : '导入记录加载失败'); } }
+  useEffect(() => { void loadHistory(); }, []);
+  async function upload(event: FormEvent) { event.preventDefault(); if (!file) { setError('请选择 CSV 或 XLSX 文件'); return; } setUploading(true); setError(''); setNotice(''); const body = new FormData(); body.append('file', file); try { const data = await request<ImportBatch>('/api/admin/imports/species', { method: 'POST', body }); setResult(data); setNotice(`导入完成：成功 ${data.successRows} 行，失败 ${data.failedRows} 行。成功数据已进入待审核队列。`); await loadHistory(); } catch (e) { setError(e instanceof Error ? e.message : '导入失败'); } finally { setUploading(false); } }
+  function downloadTemplate() { const headers = ['slug','latin_name','chinese_name','strain_number','source_environment','safety_level','is_model_organism','summary','function_tags','medium_name','temperature_min','temperature_max','ph_min','ph_max','oxygen_requirement','culture_time']; const example = ['bacillus-demo','Bacillus demo','示例芽孢杆菌','CGMCC 1.1','土壤','BSL-1','否','示例数据','biocontrol;plant-growth-promotion','LB','25','37','6.0','8.0','好氧','24 h']; const csv = `\uFEFF${headers.join(',')}\n${example.join(',')}\n`; const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); const link = document.createElement('a'); link.href = url; link.download = 'species-import-template.csv'; link.click(); URL.revokeObjectURL(url); }
+  return <section className="content"><PageHeader title="批量导入" description="上传 CSV 或 Excel，逐行校验后进入数据审核流程。" action={<button className="primary" onClick={downloadTemplate}>下载 CSV 模板</button>} />
+    <Messages error={error} notice={notice} />
+    <section className="importGrid"><form className="panel uploadPanel" onSubmit={upload}><h3>上传菌种数据</h3><p>支持 .csv、.xlsx、.xlsm，最大 10MB、5000 行。功能标签填写编码或名称，多个标签用分号分隔。</p><label className="filePicker"><input type="file" accept=".csv,.xlsx,.xlsm" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /><span>{file?.name ?? '选择文件'}</span></label><button className="primary full" disabled={uploading}>{uploading ? '解析导入中…' : '开始导入并提交审核'}</button></form>
+      <div className="panel"><div className="panelTitle"><h3>最近导入</h3><span>{history.length} 个批次</span></div><div className="batchList">{history.map((batch) => <article key={batch.id}><div><strong>{batch.sourceFilename}</strong><small>{new Date(batch.createdAt).toLocaleString()}</small></div><span className={batch.failedRows ? 'countWarning' : 'countSuccess'}>{batch.successRows} 成功 / {batch.failedRows} 失败</span></article>)}{!history.length && <div className="empty">暂无导入记录。</div>}</div></div>
+    </section>
+    {result?.rows && <section className="panel importResult"><div className="panelTitle"><h3>本次逐行结果</h3><span>{result.totalRows} 行</span></div><div className="tableWrap"><table><thead><tr><th>行号</th><th>Slug</th><th>结果</th><th>问题</th></tr></thead><tbody>{result.rows.map((row) => <tr key={row.rowNumber}><td>{row.rowNumber}</td><td><code>{row.slug || '-'}</code></td><td>{row.status === 'imported' ? '已导入待审核' : '失败'}</td><td className="rowErrors">{row.errors?.join('；') || '-'}</td></tr>)}</tbody></table></div></section>}
+  </section>;
 }
 
 function EvidenceManagement() {

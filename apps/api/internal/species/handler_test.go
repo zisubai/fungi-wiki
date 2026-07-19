@@ -15,9 +15,9 @@ type handlerFakeRepo struct {
 	params ListParams
 }
 
-func (r *handlerFakeRepo) List(_ context.Context, params ListParams) ([]Species, error) {
+func (r *handlerFakeRepo) List(_ context.Context, params ListParams) (ListResult, error) {
 	r.params = params
-	return []Species{r.item}, nil
+	return ListResult{Items: []Species{r.item}, Total: 1}, nil
 }
 func (r *handlerFakeRepo) Get(context.Context, string) (Species, error)         { return r.item, nil }
 func (r *handlerFakeRepo) Create(context.Context, CreateInput) (Species, error) { return r.item, nil }
@@ -63,6 +63,9 @@ func TestListParsesCombinedFilters(t *testing.T) {
 	}
 	if repo.params.FunctionTag != "biocontrol" || repo.params.Temperature == nil || *repo.params.Temperature != 30 || repo.params.PH == nil || *repo.params.PH != 7 || repo.params.SafetyLevel != "BSL-1" || repo.params.SourceEnvironment != "soil" {
 		t.Fatalf("unexpected params: %+v", repo.params)
+	}
+	if !strings.Contains(response.Body.String(), `"total":1`) {
+		t.Fatalf("response has no total: %s", response.Body.String())
 	}
 }
 

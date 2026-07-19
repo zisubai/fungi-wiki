@@ -1,6 +1,7 @@
 package species
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -52,7 +53,7 @@ func (handler *Handler) list(ctx *gin.Context, status string) {
 		ctx.JSON(http.StatusBadRequest, gin.H{"message": "ph must be a number between 0 and 14"})
 		return
 	}
-	items, err := handler.repo.List(ctx.Request.Context(), ListParams{
+	params := ListParams{
 		Query:             ctx.Query("q"),
 		Status:            status,
 		FunctionTag:       ctx.Query("functionTag"),
@@ -60,15 +61,28 @@ func (handler *Handler) list(ctx *gin.Context, status string) {
 		PH:                ph,
 		SafetyLevel:       ctx.Query("safetyLevel"),
 		SourceEnvironment: ctx.Query("sourceEnvironment"),
+		Sort:              ctx.Query("sort"),
 		Limit:             parseInt(ctx.Query("limit"), 20),
 		Offset:            parseInt(ctx.Query("offset"), 0),
-	})
+	}
+	result, err := handler.repo.List(ctx.Request.Context(), params)
 	if err != nil {
 		respondError(ctx, err)
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"items": items})
+	if status == "published" && hasSearchCriteria(params) {
+		if logger, ok := handler.repo.(interface {
+			LogSearch(context.Context, ListParams, int) error
+		}); ok {
+			_ = logger.LogSearch(ctx.Request.Context(), params, result.Total)
+		}
+	}
+	ctx.JSON(http.StatusOK, gin.H{"items": result.Items, "total": result.Total, "limit": params.Limit, "offset": params.Offset})
+}
+
+func hasSearchCriteria(params ListParams) bool {
+	return strings.TrimSpace(params.Query) != "" || params.FunctionTag != "" || params.Temperature != nil || params.PH != nil || params.SafetyLevel != "" || params.SourceEnvironment != ""
 }
 
 func parseOptionalFloat(value string) (*float64, error) {

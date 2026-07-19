@@ -23,6 +23,9 @@ type Species = {
 
 type ListResponse = {
   items: Species[];
+  total: number;
+  limit: number;
+  offset: number;
 };
 
 type SpeciesFunction = {
@@ -73,6 +76,7 @@ function App() {
   const [functionTags, setFunctionTags] = useState<FunctionTag[]>([]);
   const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState<SearchFilters>(emptyFilters);
+  const [total, setTotal] = useState(0); const [page, setPage] = useState(1); const pageSize = 10; const [sort, setSort] = useState('updated');
 
   const stats = useMemo(() => {
     const modelCount = items.filter((item) => item.isModelOrganism).length;
@@ -80,15 +84,17 @@ function App() {
     return { modelCount, safetyLevelCount: safetyLevels.size };
   }, [items]);
 
-  async function loadSpecies(search = query, nextFilters = filters) {
+  async function loadSpecies(search = query, nextFilters = filters, targetPage = 1, nextSort = sort) {
     setLoading(true);
     setError('');
     try {
       const params = new URLSearchParams();
       if (search.trim()) params.set('q', search.trim());
       Object.entries(nextFilters).forEach(([key, value]) => { if (value.trim()) params.set(key, value.trim()); });
+      params.set('limit', String(pageSize)); params.set('offset', String((targetPage - 1) * pageSize)); params.set('sort', nextSort);
       const data = await request<ListResponse>(`/api/species?${params.toString()}`);
       setItems(data.items);
+      setTotal(data.total); setPage(targetPage); setSort(nextSort);
       setSubmittedQuery(search.trim());
       setAppliedFilters(nextFilters);
       if (!routeSlug && data.items.length > 0) {
@@ -127,11 +133,11 @@ function App() {
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void loadSpecies(query);
+    void loadSpecies(query, filters, 1);
   }
 
   function resetSearch() {
-    setQuery(''); setFilters(emptyFilters); void loadSpecies('', emptyFilters);
+    setQuery(''); setFilters(emptyFilters); setSort('updated'); void loadSpecies('', emptyFilters, 1, 'updated');
   }
 
   useEffect(() => {
@@ -182,7 +188,7 @@ function App() {
 
       <section className="stats">
         <article>
-          <strong>{items.length}</strong>
+          <strong>{total}</strong>
           <span>已发布菌种</span>
         </article>
         <article>
@@ -206,6 +212,7 @@ function App() {
             </div>
             <button className="ghost" onClick={resetSearch}>重置</button>
           </div>
+          <div className="resultControls"><span>第 {page} / {Math.max(1, Math.ceil(total / pageSize))} 页</span><select value={sort} onChange={(e) => void loadSpecies(submittedQuery, appliedFilters, 1, e.target.value)}><option value="updated">最近更新</option><option value="name">拉丁名 A–Z</option><option value="quality">数据质量优先</option><option value="oldest">最早更新</option></select></div>
 
           <div className="speciesList">
             {items.map((item) => (
@@ -226,6 +233,7 @@ function App() {
               <div className="empty">暂无匹配菌种。可以在运营端新增并发布菌种。</div>
             )}
           </div>
+          {total > pageSize && <nav className="pagination"><button disabled={page <= 1 || loading} onClick={() => void loadSpecies(submittedQuery, appliedFilters, page - 1)}>上一页</button><span>{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} / {total}</span><button disabled={page * pageSize >= total || loading} onClick={() => void loadSpecies(submittedQuery, appliedFilters, page + 1)}>下一页</button></nav>}
         </section>
 
         <section className="panel detailPanel">

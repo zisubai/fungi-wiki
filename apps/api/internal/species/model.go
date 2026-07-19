@@ -36,8 +36,14 @@ type ListParams struct {
 	PH                *float64
 	SafetyLevel       string
 	SourceEnvironment string
+	Sort              string
 	Limit             int
 	Offset            int
+}
+
+type ListResult struct {
+	Items []Species
+	Total int
 }
 
 type CreateInput struct {

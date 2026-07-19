@@ -44,6 +44,9 @@ scripts/               开发和数据库脚本
 - 草稿、待审核、已发布、已归档状态管理
 - 提交审核、审核通过和驳回流程
 - 按关键词、功能、温度、pH、安全等级和来源环境联合筛选
+- 搜索结果分页、排序、搜索日志和运营端搜索分析
+- CSV / Excel 批量导入、逐行错误反馈和导入批次记录
+- 运营端登录、JWT 会话和运营/专家/管理员角色权限
 - 公开接口仅展示已发布数据
 
 ## 环境要求
@@ -94,15 +97,16 @@ postgres://fungi:fungi@localhost:55432/fungi_wiki?sslmode=disable
 
 ## 数据库迁移
 
-新建数据库时，PostgreSQL 容器会按文件名顺序执行 `apps/api/migrations` 下的 SQL。
+Go API 启动时会自动按文件名顺序执行 `apps/api/migrations` 下尚未应用的 SQL，无需再手动运行迁移命令。
 
-已有数据库需要手动应用新增迁移。例如应用搜索索引：
+迁移运行器会：
 
-```bash
-docker exec -i fungi-wiki-postgres \
-  psql -U fungi -d fungi_wiki \
-  < apps/api/migrations/002_search_indexes.sql
-```
+- 使用数据库 advisory lock 防止多个 API 实例重复迁移。
+- 在 `schema_migrations` 表记录文件名、SHA-256 校验值和执行时间。
+- 自动识别并兼容迁移运行器加入前已经创建的 001–004 表结构。
+- 拒绝执行被修改过的历史迁移文件。
+
+新增结构时应创建新的递增 SQL 文件，例如 `005_species_aliases.sql`，不要修改已经应用的迁移。
 
 ## 数据发布流程
 

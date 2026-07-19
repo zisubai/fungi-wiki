@@ -2,6 +2,7 @@ package species
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -15,7 +16,7 @@ var ErrNotFound = errors.New("species not found")
 var ErrDuplicateSlug = errors.New("species slug already exists")
 
 type Repository interface {
-	List(ctx context.Context, params ListParams) ([]Species, error)
+	List(ctx context.Context, params ListParams) (ListResult, error)
 	Get(ctx context.Context, idOrSlug string) (Species, error)
 	Create(ctx context.Context, input CreateInput) (Species, error)
 	Update(ctx context.Context, idOrSlug string, input UpdateInput) (Species, error)
@@ -31,7 +32,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-func (repo *PostgresRepository) List(ctx context.Context, params ListParams) ([]Species, error) {
+func (repo *PostgresRepository) List(ctx context.Context, params ListParams) (ListResult, error) {
 	limit := params.Limit
 	if limit <= 0 || limit > 100 {
 		limit = 20
@@ -93,6 +94,20 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) ([]
 		where = append(where, fmt.Sprintf("source_environment ILIKE $%d", len(args)))
 	}
 
+	whereSQL := strings.Join(where, " AND ")
+	var total int
+	if err := repo.pool.QueryRow(ctx, `SELECT COUNT(*) FROM species WHERE `+whereSQL, args...).Scan(&total); err != nil {
+		return ListResult{}, err
+	}
+	orderBy := "updated_at DESC"
+	switch params.Sort {
+	case "name":
+		orderBy = "latin_name ASC"
+	case "quality":
+		orderBy = "data_quality_score DESC, updated_at DESC"
+	case "oldest":
+		orderBy = "updated_at ASC"
+	}
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
 		SELECT id::text, slug, latin_name, COALESCE(chinese_name, ''), COALESCE(strain_number, ''),
@@ -100,13 +115,13 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) ([]
 		       COALESCE(summary, ''), status, data_quality_score, created_at, updated_at, published_at
 		FROM species
 		WHERE %s
-		ORDER BY updated_at DESC
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, strings.Join(where, " AND "), len(args)-1, len(args))
+	`, whereSQL, orderBy, len(args)-1, len(args))
 
 	rows, err := repo.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return ListResult{}, err
 	}
 	defer rows.Close()
 
@@ -114,12 +129,21 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) ([]
 	for rows.Next() {
 		item, err := scanSpecies(rows)
 		if err != nil {
-			return nil, err
+			return ListResult{}, err
 		}
 		items = append(items, item)
 	}
 
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return ListResult{}, err
+	}
+	return ListResult{Items: items, Total: total}, nil
+}
+
+func (repo *PostgresRepository) LogSearch(ctx context.Context, params ListParams, resultCount int) error {
+	filters, _ := json.Marshal(map[string]any{"functionTag": params.FunctionTag, "temperature": params.Temperature, "ph": params.PH, "safetyLevel": params.SafetyLevel, "sourceEnvironment": params.SourceEnvironment, "sort": params.Sort})
+	_, err := repo.pool.Exec(ctx, `INSERT INTO search_logs(query,filters,result_count)VALUES($1,$2::jsonb,$3)`, strings.TrimSpace(params.Query), string(filters), resultCount)
+	return err
 }
 
 func (repo *PostgresRepository) Get(ctx context.Context, idOrSlug string) (Species, error) {

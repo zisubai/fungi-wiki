@@ -22,23 +22,44 @@ docker compose up -d postgres
 postgres://fungi:fungi@localhost:55432/fungi_wiki?sslmode=disable
 ```
 
-首次启动会自动执行：
+API 启动时自动执行尚未应用的迁移：
 
 ```text
-apps/api/migrations/001_init_schema.sql
+apps/api/migrations/*.sql
 ```
 
-已有数据库升级到多条件搜索索引时执行：
-
-```bash
-docker exec -i fungi-wiki-postgres psql -U fungi -d fungi_wiki < apps/api/migrations/002_search_indexes.sql
-```
+执行记录保存在 `schema_migrations`，历史迁移通过 SHA-256 校验，已有 001–004 数据库会自动建立基线。新增迁移后重启 API 即可。
 
 ## 启动 API
 
 ```bash
 DATABASE_URL="postgres://fungi:fungi@localhost:55432/fungi_wiki?sslmode=disable" go run ./cmd/server
 ```
+
+首次启动会根据以下环境变量创建或更新初始化管理员密码：
+
+```text
+JWT_SECRET=replace-with-a-long-random-secret
+ADMIN_EMAIL=admin@fungi.local
+ADMIN_PASSWORD=admin123456
+```
+
+默认值仅供本地开发，部署时必须修改 `JWT_SECRET` 和 `ADMIN_PASSWORD`。
+
+## 登录与角色权限
+
+```text
+POST /api/auth/login
+GET  /api/auth/me
+GET  /api/admin/users
+POST /api/admin/users
+```
+
+- `operator`：维护菌种、标签、培养条件、文献证据和批量导入。
+- `expert`：查看待审核数据并执行通过或驳回。
+- `admin`：拥有全部权限，并可创建账号。
+
+所有 `/api/admin/*` 请求必须携带 `Authorization: Bearer <token>`。
 
 也可以在项目根目录执行：
 
@@ -69,6 +90,25 @@ GET /api/species?functionTag=biocontrol&temperature=30&ph=7.0&safetyLevel=BSL-1&
 - `q`：名称、Slug 或摘要关键词。
 
 多个参数同时提供时使用 AND 联合筛选。
+
+分页和排序参数：
+
+- `limit`：每页数量，默认 20，最大 100。
+- `offset`：结果偏移量。
+- `sort`：`updated`、`name`、`quality` 或 `oldest`。
+
+列表响应包含：
+
+```json
+{
+  "items": [],
+  "total": 0,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+带关键词或筛选条件的公开搜索会写入 `search_logs`，记录查询、筛选条件和结果数量。
 
 用户端列表默认只返回 `published` 状态的菌种。
 
@@ -207,3 +247,30 @@ draft → pending_review → published
 ```
 
 菌种创建后固定为草稿；编辑已发布菌种会退回草稿。待审核数据不可编辑，只有审核通过接口可以发布。
+
+## CSV / Excel 批量导入
+
+```text
+POST /api/admin/imports/species
+GET  /api/admin/imports?limit=20
+```
+
+上传接口使用 `multipart/form-data`，文件字段名为 `file`，支持 CSV、XLSX 和 XLSM，单次最多 10MB、5000 行。
+
+必需表头为 `slug` 和 `latin_name`，也支持中文表头“标识”和“拉丁名”。可选表头：
+
+```text
+chinese_name,strain_number,source_environment,safety_level,is_model_organism,
+summary,function_tags,medium_name,temperature_min,temperature_max,
+ph_min,ph_max,oxygen_requirement,culture_time
+```
+
+合法数据会直接进入 `pending_review` 并生成审核记录；重复 Slug、缺少必填字段、范围错误或功能标签不存在的数据会作为失败行返回，不影响其他合法行。
+
+## 搜索分析
+
+```text
+GET /api/admin/search-analytics?days=30
+```
+
+返回搜索次数、不同关键词数、无结果搜索数、热门关键词和无结果关键词。`days` 支持 1–365 天。

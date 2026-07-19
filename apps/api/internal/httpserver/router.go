@@ -7,11 +7,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"fungi-wiki/apps/api/internal/audit"
+	"fungi-wiki/apps/api/internal/auth"
 	"fungi-wiki/apps/api/internal/config"
 	"fungi-wiki/apps/api/internal/culturecondition"
 	"fungi-wiki/apps/api/internal/evidence"
 	"fungi-wiki/apps/api/internal/functiontag"
 	"fungi-wiki/apps/api/internal/health"
+	"fungi-wiki/apps/api/internal/importjob"
+	"fungi-wiki/apps/api/internal/searchanalytics"
 	"fungi-wiki/apps/api/internal/species"
 	"fungi-wiki/apps/api/internal/speciesfunction"
 )
@@ -28,9 +31,14 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	cultureRepo := culturecondition.NewPostgresRepository(pool)
 	evidenceRepo := evidence.NewPostgresRepository(pool)
 	auditRepo := audit.NewPostgresRepository(pool)
+	importRepo := importjob.NewPostgresRepository(pool)
+	authRepo := auth.NewPostgresRepository(pool)
+	tokenService := auth.NewTokenService(cfg.JWTSecret)
+	searchAnalyticsRepo := searchanalytics.NewPostgresRepository(pool)
 
 	api := router.Group("/api")
 	{
+		auth.RegisterRoutes(api.Group("/auth"), authRepo, tokenService)
 		species.RegisterPublicRoutes(api.Group("/species"), speciesRepo)
 		publishedSpecies := api.Group("/species", publishedSpeciesOnly(pool))
 		speciesfunction.RegisterPublicRoutes(publishedSpecies, speciesFunctionRepo)
@@ -38,7 +46,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 		evidence.RegisterPublicRoutes(publishedSpecies, evidenceRepo)
 		functiontag.RegisterPublicRoutes(api.Group("/function-tags"), functionTagRepo)
 
-		admin := api.Group("/admin")
+		admin := api.Group("/admin", auth.Authenticate(tokenService), auth.AuthorizeAdmin())
 		{
 			species.RegisterAdminRoutes(admin.Group("/species"), speciesRepo)
 			speciesfunction.RegisterAdminRoutes(admin.Group("/species"), speciesFunctionRepo)
@@ -46,6 +54,9 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 			evidence.RegisterAdminRoutes(admin.Group("/species"), evidenceRepo)
 			functiontag.RegisterAdminRoutes(admin.Group("/function-tags"), functionTagRepo)
 			audit.RegisterAdminRoutes(admin.Group("/audits"), auditRepo)
+			importjob.RegisterAdminRoutes(admin.Group("/imports"), importRepo)
+			auth.RegisterAdminRoutes(admin.Group("/users"), authRepo)
+			searchanalytics.RegisterAdminRoutes(admin.Group("/search-analytics"), searchAnalyticsRepo)
 		}
 	}
 
