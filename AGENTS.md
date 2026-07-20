@@ -25,7 +25,9 @@ npm run dev:api      # Go API on :8080
 npm run dev:web      # public site on :5173
 npm run dev:admin    # admin console on :5174
 npm run test:api     # run all Go tests
+npm run vet:api      # run Go static analysis
 npm run test:admin   # run admin Vitest component tests
+npm run test:web     # run public-site Vitest component tests
 npm run build:api    # compile the API server
 npm run build:web    # type-check and build the public app
 npm run build:admin  # type-check and build the admin app
@@ -39,7 +41,7 @@ Create migrations with increasing names such as `006_add_feedback_index.sql`. Ne
 
 ## Testing Guidelines
 
-Go uses `testing` plus `httptest` for handlers. Name tests `TestBehaviorBeingVerified`. Admin UI tests use Vitest and Testing Library; name them `*.test.tsx` beside the feature or app shell. Cover validation, authorization, parsers, scoring, migrations, and role-sensitive UI. Before submitting, run all builds, `npm run test:api`, and `npm run test:admin`.
+Go uses `testing` plus `httptest` for handlers. Name tests `TestBehaviorBeingVerified`. Web and admin UI tests use Vitest and Testing Library; name them `*.test.tsx` beside the feature or app shell. Cover validation, authorization, parsers, scoring, migrations, search/recommendation flows, and role-sensitive UI. Before submitting, run `npm run verify`.
 
 ## Commit & Pull Request Guidelines
 

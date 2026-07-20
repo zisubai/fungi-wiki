@@ -1,0 +1,13 @@
+import type { FormEvent } from 'react';
+import type { FunctionTag, RecommendationResponse } from '../../types';
+
+type Props = { requirement: string; functionCode: string; recommending: boolean; recommendation: RecommendationResponse | null; feedback: string; functionTags: FunctionTag[]; onRequirementChange: (value: string) => void; onFunctionChange: (value: string) => void; onSubmit: (event: FormEvent) => void; onOpenSpecies: (slug: string) => void; onFeedback: (type: 'helpful' | 'unhelpful') => void };
+
+export function RecommendationPanel(props: Props) {
+  const { requirement, functionCode, recommending, recommendation, feedback, functionTags, onRequirementChange, onFunctionChange, onSubmit, onOpenSpecies, onFeedback } = props;
+  return <section className="recommendPanel">
+    <div className="recommendIntro"><p className="eyebrow">Explainable Recommendation</p><h2>菌种推荐助手</h2><p>描述你的目标，系统会基于已发布数据、培养条件和文献证据给出可解释候选。</p></div>
+    <form className="recommendForm" onSubmit={onSubmit}><textarea required minLength={2} maxLength={2000} value={requirement} onChange={(e) => onRequirementChange(e.target.value)} placeholder="例如：寻找适合 30°C、中性环境的土壤生防菌，用于植物病原菌抑制。" rows={3} /><select value={functionCode} onChange={(e) => onFunctionChange(e.target.value)}><option value="">自动识别功能</option>{functionTags.map((tag) => <option key={tag.id} value={tag.code}>{tag.name}</option>)}</select><button disabled={recommending}>{recommending ? '计算候选中…' : '生成推荐'}</button></form>
+    {recommendation && <div className="recommendResults">{recommendation.items.map((item, index) => <article key={item.id}><div className="recommendRank">#{index + 1}</div><div><div className="recommendTitle"><strong>{item.latinName}</strong><span>{item.score} 分</span></div><small>{item.chineseName || item.slug} · {item.safetyLevel || '安全等级未标注'}</small><p>{item.summary || '暂无摘要'}</p><ul>{item.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>{item.riskWarning && <div className="riskWarning">{item.riskWarning}</div>}<button className="ghost" onClick={() => onOpenSpecies(item.slug)}>查看菌种详情</button></div></article>)}{!recommendation.items.length && <div className="empty">没有满足当前条件的已发布菌种，请放宽条件或补充数据库。</div>}<p className="disclaimer">{recommendation.disclaimer}</p><div className="recommendFeedback">{feedback ? <span>感谢反馈，我们会用于改进推荐质量。</span> : <><span>这次推荐有帮助吗？</span><button onClick={() => onFeedback('helpful')}>👍 有帮助</button><button onClick={() => onFeedback('unhelpful')}>👎 无帮助</button></>}</div></div>}
+  </section>;
+}

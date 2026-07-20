@@ -27,10 +27,38 @@ jobs:
         run: npm ci
       - name: Test and build frontend apps
         run: npm run verify:frontend
+      - name: Upload admin coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-coverage
+          path: apps/admin/coverage
+          if-no-files-found: error
+      - name: Upload public website coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-coverage
+          path: apps/web/coverage
+          if-no-files-found: error
 
   backend:
-    name: Go tests and build
+    name: Go checks and integration smoke
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: fungi_wiki
+          POSTGRES_USER: fungi
+          POSTGRES_PASSWORD: fungi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fungi -d fungi_wiki"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: apps/api
@@ -44,5 +72,28 @@ jobs:
           cache-dependency-path: apps/api/go.sum
       - name: Test API
         run: go test ./...
+      - name: Vet API
+        run: go vet ./...
       - name: Build API
         run: go build ./cmd/server
+      - name: Start API and run integration smoke checks
+        env:
+          DATABASE_URL: postgres://fungi:fungi@localhost:5432/fungi_wiki?sslmode=disable
+          JWT_SECRET: ci-only-secret
+          ADMIN_EMAIL: admin@fungi.local
+          ADMIN_PASSWORD: ci-admin-password
+        run: |
+          go run ./cmd/server > /tmp/fungi-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8080/healthz >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              cat /tmp/fungi-api.log
+              exit 1
+            fi
+            sleep 1
+          done
+          ../../scripts/smoke-api.sh

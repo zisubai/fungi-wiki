@@ -1,7 +1,11 @@
 package httpserver
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,9 +27,10 @@ import (
 
 func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery(), corsMiddleware())
+	router.Use(requestIDMiddleware(), securityHeadersMiddleware(), requestLoggerMiddleware(), gin.Recovery(), corsMiddleware())
 
 	router.GET("/healthz", health.Handle(cfg))
+	router.GET("/readyz", health.Ready(cfg, pool))
 
 	speciesRepo := species.NewPostgresRepository(pool)
 	functionTagRepo := functiontag.NewPostgresRepository(pool)
@@ -72,6 +77,50 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	return router
 }
 
+var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
+func requestIDMiddleware() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		requestID := ctx.GetHeader("X-Request-ID")
+		if !requestIDPattern.MatchString(requestID) {
+			buffer := make([]byte, 16)
+			if _, err := rand.Read(buffer); err != nil {
+				requestID = "request-id-unavailable"
+			} else {
+				requestID = hex.EncodeToString(buffer)
+			}
+		}
+		ctx.Set("requestID", requestID)
+		ctx.Header("X-Request-ID", requestID)
+		ctx.Next()
+	}
+}
+
+func securityHeadersMiddleware() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		ctx.Header("X-Content-Type-Options", "nosniff")
+		ctx.Header("X-Frame-Options", "DENY")
+		ctx.Header("Referrer-Policy", "no-referrer")
+		ctx.Header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		ctx.Next()
+	}
+}
+
+func requestLoggerMiddleware() gin.HandlerFunc {
+	return gin.LoggerWithFormatter(func(params gin.LogFormatterParams) string {
+		requestID, _ := params.Keys["requestID"].(string)
+		return fmt.Sprintf("request_id=%s method=%s path=%s status=%d latency=%s client_ip=%s error=%q\n",
+			requestID,
+			params.Method,
+			params.Path,
+			params.StatusCode,
+			params.Latency,
+			params.ClientIP,
+			params.ErrorMessage,
+		)
+	})
+}
+
 func publishedSpeciesOnly(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var exists bool
@@ -92,7 +141,8 @@ func corsMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		ctx.Header("Access-Control-Allow-Origin", "*")
 		ctx.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
-		ctx.Header("Access-Control-Allow-Headers", "Authorization,Content-Type")
+		ctx.Header("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Request-ID")
+		ctx.Header("Access-Control-Expose-Headers", "X-Request-ID")
 
 		if ctx.Request.Method == http.MethodOptions {
 			ctx.AbortWithStatus(http.StatusNoContent)

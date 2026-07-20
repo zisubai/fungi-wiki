@@ -90,6 +90,7 @@ npm run dev:admin
 | 运营端 | http://localhost:5174 |
 | API | http://localhost:8080 |
 | 健康检查 | http://localhost:8080/healthz |
+| 就绪检查 | http://localhost:8080/readyz |
 | PostgreSQL | localhost:55432 |
 
 默认数据库连接：
@@ -138,13 +139,27 @@ GET /api/species?functionTag=biocontrol&temperature=30&ph=7&safetyLevel=BSL-1&so
 ```bash
 npm run test:api
 npm run test:admin
+npm run test:admin:coverage
+npm run test:web
+npm run test:web:coverage
 npm run build:api
+npm run vet:api
 npm run build:web
 npm run build:admin
 npm run verify
 ```
 
-`npm run verify` 会执行运营端测试、前后端构建和 Go 测试，适合提交代码前一次性检查。
+`npm run verify` 会执行用户端和运营端覆盖率门禁、前后端构建及 Go 测试，适合提交代码前一次性检查。CI 会将 HTML 报告保存为 `web-coverage` 和 `admin-coverage` 构建产物。
+
+后端 CI 还会启动 PostgreSQL 17，自动执行迁移与管理员初始化，再运行 `scripts/smoke-api.sh` 检查健康接口和公共菌种接口。
+
+Go API 配置了请求读写超时，并在收到 `SIGINT` 或 `SIGTERM` 时最多等待 10 秒完成优雅关闭。`/healthz` 用于进程存活检查，`/readyz` 会访问 PostgreSQL，用于判断实例是否可以接收流量。
+
+API 响应包含 `X-Request-ID` 和基础安全响应头；客户端也可以传入合法的 `X-Request-ID` 以关联网关、后端和前端日志。
+
+API 访问日志包含 `request_id`、HTTP 方法、路径、状态码、耗时和客户端 IP，可使用响应头中的 Request ID 检索对应请求。
+
+用户端和运营端会在请求发出前生成 `X-Request-ID`，并在接口或网络错误消息中显示该值；即使没有收到后端响应，也能使用请求 ID 检索网关和 API 日志。
 
 GitHub Actions 会在每次 push 和 pull request 时自动执行运营端测试、Go 测试以及三端生产构建，配置位于 `.github/workflows/ci.yml`。
 

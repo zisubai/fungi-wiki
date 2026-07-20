@@ -1,0 +1,27 @@
+import type { CultureCondition, Evidence, SearchFilters, Species, SpeciesAlias, SpeciesFunction } from '../../types';
+
+type ListProps = { items: Species[]; selectedId?: string; loading: boolean; submittedQuery: string; activeFilterCount: number; page: number; pageSize: number; total: number; sort: string; appliedFilters: SearchFilters; onReset: () => void; onSort: (sort: string) => void; onPage: (page: number) => void; onSelect: (slug: string) => void };
+
+export function SpeciesListPanel(props: ListProps) {
+  const { items, selectedId, loading, submittedQuery, activeFilterCount, page, pageSize, total, sort, onReset, onSort, onPage, onSelect } = props;
+  return <section className="panel listPanel">
+    <div className="panelTitle"><div><h2>菌种列表</h2><p>{submittedQuery || activeFilterCount ? `${submittedQuery ? `关键词“${submittedQuery}” · ` : ''}${activeFilterCount} 个筛选条件` : '展示已发布菌种'}</p></div><button className="ghost" onClick={onReset}>重置</button></div>
+    <div className="resultControls"><span>第 {page} / {Math.max(1, Math.ceil(total / pageSize))} 页</span><select aria-label="结果排序" value={sort} onChange={(e) => onSort(e.target.value)}><option value="updated">最近更新</option><option value="name">拉丁名 A–Z</option><option value="quality">数据质量优先</option><option value="oldest">最早更新</option></select></div>
+    <div className="speciesList">{items.map((item) => <button className={`speciesItem ${selectedId === item.id ? 'selected' : ''}`} key={item.id} onClick={() => onSelect(item.slug || item.id)}><span><strong>{item.latinName}</strong><small>{item.chineseName || item.slug}</small></span><em>{item.safetyLevel || '未标注'}</em></button>)}{!items.length && !loading && <div className="empty">暂无匹配菌种。可以在运营端新增并发布菌种。</div>}</div>
+    {total > pageSize && <nav className="pagination"><button disabled={page <= 1 || loading} onClick={() => onPage(page - 1)}>上一页</button><span>{(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} / {total}</span><button disabled={page * pageSize >= total || loading} onClick={() => onPage(page + 1)}>下一页</button></nav>}
+  </section>;
+}
+
+type DetailProps = { selected: Species | null; detailLoading: boolean; routeSlug: string; aliases: SpeciesAlias[]; functions: SpeciesFunction[]; conditions: CultureCondition[]; evidences: Evidence[] };
+
+export function SpeciesDetailPanel({ selected, detailLoading, routeSlug, aliases, functions, conditions, evidences }: DetailProps) {
+  return <section className="panel detailPanel"><div className="panelTitle"><div><h2>菌种详情</h2><p>{detailLoading ? '详情加载中...' : routeSlug ? `直达详情页：/species/${routeSlug}` : '来自 GET /api/species/:idOrSlug'}</p></div></div>
+    {selected ? <article className="detail"><div className="titleRow"><div><h3>{selected.latinName}</h3><p>{selected.chineseName || '暂无中文名'}</p></div><span className="badge">{selected.safetyLevel || '未标注'}</span></div><p className="description">{selected.summary || '暂无摘要。'}</p>
+      {aliases.length > 0 && <section className="aliasSection"><strong>别名与同义词</strong><div>{aliases.map((alias) => <span key={alias.id}>{alias.name}</span>)}</div></section>}
+      <section className="functionSection"><h4>功能标签</h4><div className="functionTags">{functions.map((item) => <span key={item.functionTagId}>{item.functionTagName}</span>)}{!functions.length && <small>暂无已关联功能</small>}</div></section>
+      <section className="functionSection"><h4>培养条件</h4>{conditions.map((item) => <div className="conditionCard" key={item.id}><strong>{item.mediumName || '未指定培养基'}</strong><span>温度：{item.temperatureMin ?? '-'}–{item.temperatureMax ?? '-'} °C</span><span>pH：{item.phMin ?? '-'}–{item.phMax ?? '-'}</span><span>氧需求：{item.oxygenRequirement || '-'}</span><span>时间：{item.cultureTime || '-'}</span></div>)}{!conditions.length && <small>暂无培养条件</small>}</section>
+      <section className="functionSection"><h4>文献证据</h4><div className="evidenceCards">{evidences.map((item) => <article key={item.id}><strong>{item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.title}</a> : item.title}</strong><p>{item.conclusion}</p><small>{item.journal} {item.publicationYear ?? ''} · 证据等级：{item.evidenceLevel}</small></article>)}</div>{!evidences.length && <small>暂无文献证据</small>}</section>
+      <dl><div><dt>Slug</dt><dd>{selected.slug}</dd></div><div><dt>菌株编号</dt><dd>{selected.strainNumber || '-'}</dd></div><div><dt>来源环境</dt><dd>{selected.sourceEnvironment || '-'}</dd></div><div><dt>模式菌 / 底盘菌</dt><dd>{selected.isModelOrganism ? '是' : '否'}</dd></div><div><dt>数据质量分</dt><dd>{selected.dataQualityScore}</dd></div><div><dt>更新时间</dt><dd>{new Date(selected.updatedAt).toLocaleString()}</dd></div></dl>
+    </article> : <div className="empty">请选择一个菌种查看详情。</div>}
+  </section>;
+}

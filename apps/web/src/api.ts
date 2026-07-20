@@ -1,7 +1,5 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
 
-export const authTokenKey = 'fungi_admin_token';
-
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number, public readonly requestId: string) {
     super(requestId ? `${message}（请求 ID：${requestId}）` : message);
@@ -14,23 +12,17 @@ function createRequestId() {
 }
 
 export async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const isFormData = options?.body instanceof FormData;
-  const token = localStorage.getItem(authTokenKey);
   const requestId = new Headers(options?.headers).get('X-Request-ID') ?? createRequestId();
   let response: Response;
   try {
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...options,
-      headers: { ...(!isFormData ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}), 'X-Request-ID': requestId, ...options?.headers },
+      headers: { 'Content-Type': 'application/json', 'X-Request-ID': requestId, ...options?.headers },
     });
   } catch (cause) {
     throw new ApiError(cause instanceof Error ? cause.message : '网络请求失败', 0, requestId);
   }
   if (!response.ok) {
-    if (response.status === 401 && path !== '/api/auth/login') {
-      localStorage.removeItem(authTokenKey);
-      window.dispatchEvent(new Event('auth-expired'));
-    }
     const message = await response.json().catch(() => undefined);
     throw new ApiError(message?.message ?? `请求失败：${response.status}`, response.status, response.headers.get('X-Request-ID') ?? requestId);
   }

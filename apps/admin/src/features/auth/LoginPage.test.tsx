@@ -24,6 +24,6 @@ describe('LoginPage', () => {
     render(<LoginPage onLogin={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('密码'), { target: { value: 'wrong-password' } });
     fireEvent.click(screen.getByRole('button', { name: '登录' }));
-    expect(await screen.findByText('邮箱或密码错误')).toBeInTheDocument();
+    expect(await screen.findByText(/邮箱或密码错误（请求 ID：.+）/)).toBeInTheDocument();
   });
 });

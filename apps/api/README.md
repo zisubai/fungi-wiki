@@ -71,6 +71,7 @@ npm run dev:api
 
 ```text
 GET /healthz
+GET /readyz
 GET /api/species
 GET /api/species?q=促生
 GET /api/species/bacillus-subtilis
