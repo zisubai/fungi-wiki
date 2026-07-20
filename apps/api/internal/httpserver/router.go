@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,6 +15,7 @@ import (
 	"fungi-wiki/apps/api/internal/auth"
 	"fungi-wiki/apps/api/internal/config"
 	"fungi-wiki/apps/api/internal/culturecondition"
+	"fungi-wiki/apps/api/internal/dataquality"
 	"fungi-wiki/apps/api/internal/evidence"
 	"fungi-wiki/apps/api/internal/functiontag"
 	"fungi-wiki/apps/api/internal/health"
@@ -25,9 +27,13 @@ import (
 	"fungi-wiki/apps/api/internal/speciesfunction"
 )
 
-func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
+func NewRouter(cfg config.Config, pool *pgxpool.Pool) (*gin.Engine, error) {
 	router := gin.New()
-	router.Use(requestIDMiddleware(), securityHeadersMiddleware(), requestLoggerMiddleware(), gin.Recovery(), corsMiddleware())
+	trustedProxies := splitCommaSeparated(cfg.TrustedProxies)
+	if err := router.SetTrustedProxies(trustedProxies); err != nil {
+		return nil, fmt.Errorf("configure trusted proxies: %w", err)
+	}
+	router.Use(requestIDMiddleware(), securityHeadersMiddleware(), requestLoggerMiddleware(), gin.Recovery(), corsMiddleware(cfg.CORSOrigins))
 
 	router.GET("/healthz", health.Handle(cfg))
 	router.GET("/readyz", health.Ready(cfg, pool))
@@ -44,6 +50,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 	searchAnalyticsRepo := searchanalytics.NewPostgresRepository(pool)
 	speciesAliasRepo := speciesalias.NewPostgresRepository(pool)
 	recommendationRepo := recommendation.NewPostgresRepository(pool)
+	dataQualityRepo := dataquality.NewPostgresRepository(pool)
 
 	api := router.Group("/api")
 	{
@@ -71,10 +78,21 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) *gin.Engine {
 			auth.RegisterAdminRoutes(admin.Group("/users"), authRepo)
 			searchanalytics.RegisterAdminRoutes(admin.Group("/search-analytics"), searchAnalyticsRepo)
 			recommendation.RegisterAdminRoutes(admin.Group("/recommendations"), recommendationRepo)
+			dataquality.RegisterAdminRoutes(admin.Group("/data-quality"), dataQualityRepo)
 		}
 	}
 
-	return router
+	return router, nil
+}
+
+func splitCommaSeparated(value string) []string {
+	var items []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			items = append(items, item)
+		}
+	}
+	return items
 }
 
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
@@ -137,9 +155,29 @@ func publishedSpeciesOnly(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-func corsMiddleware() gin.HandlerFunc {
+func corsMiddleware(origins string) gin.HandlerFunc {
+	allowedOrigins := make(map[string]struct{})
+	for _, origin := range strings.Split(origins, ",") {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			allowedOrigins[origin] = struct{}{}
+		}
+	}
 	return func(ctx *gin.Context) {
-		ctx.Header("Access-Control-Allow-Origin", "*")
+		origin := ctx.GetHeader("Origin")
+		if origin != "" {
+			_, allowed := allowedOrigins[origin]
+			_, wildcard := allowedOrigins["*"]
+			if !allowed && !wildcard {
+				if ctx.Request.Method == http.MethodOptions {
+					ctx.AbortWithStatus(http.StatusForbidden)
+					return
+				}
+				ctx.Next()
+				return
+			}
+			ctx.Header("Access-Control-Allow-Origin", origin)
+			ctx.Header("Vary", "Origin")
+		}
 		ctx.Header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 		ctx.Header("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Request-ID")
 		ctx.Header("Access-Control-Expose-Headers", "X-Request-ID")

@@ -40,13 +40,18 @@ describe('SpeciesManagement', () => {
       if (path.endsWith('/functions') && !options) return Promise.resolve({ items: [{ functionTagId: 'tag-1', functionTagName: '生防' }] });
       if (path.endsWith('/culture-conditions') && !options) return Promise.resolve({ items: [{ mediumName: 'LB', temperatureMin: 25, temperatureMax: 37, phMin: 6, phMax: 8, oxygenRequirement: '好氧', cultureTime: '24 h', notes: '' }] });
       if (path.endsWith('/aliases') && !options) return Promise.resolve({ items: [{ id: 'alias-1', name: '旧名', type: 'synonym', source: '' }] });
+      if (path.endsWith('/quality') && !options) return Promise.resolve({ score: 80, components: [{ key: 'latinName', label: '拉丁学名', weight: 10, completed: true }, { key: 'evidences', label: '文献证据', weight: 15, completed: false }] });
       if (path === '/api/admin/species/bacillus-test' && options?.method === 'PUT') return Promise.resolve(existingSpecies);
       return Promise.resolve(undefined);
     });
     render(<SpeciesManagement />);
+    expect(await screen.findByText('80 分')).toBeInTheDocument();
+    expect(screen.getByText('完整')).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: '编辑' }));
     expect(await screen.findByDisplayValue('旧名')).toBeInTheDocument();
     expect(screen.getByDisplayValue('LB')).toBeInTheDocument();
+    expect(screen.getByText('80 / 100')).toBeInTheDocument();
+    expect(screen.getByText('! 文献证据')).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('摘要'), { target: { value: '更新后的摘要' } });
     fireEvent.click(screen.getByRole('button', { name: '保存菌种' }));
     await waitFor(() => expect(requestMock).toHaveBeenCalledWith('/api/admin/species/bacillus-test', expect.objectContaining({ method: 'PUT', body: expect.stringContaining('更新后的摘要') })));

@@ -46,11 +46,14 @@ func (h *Handler) review(c *gin.Context, ok bool) {
 func (h *Handler) approve(c *gin.Context) { h.review(c, true) }
 func (h *Handler) reject(c *gin.Context)  { h.review(c, false) }
 func fail(c *gin.Context, e error) {
+	var qualityErr *QualityGateError
 	switch {
 	case errors.Is(e, ErrNotFound), errors.Is(e, ErrSpeciesNotFound):
 		c.JSON(404, gin.H{"message": e.Error()})
 	case errors.Is(e, ErrInvalidState):
 		c.JSON(409, gin.H{"message": e.Error()})
+	case errors.As(e, &qualityErr):
+		c.JSON(422, gin.H{"message": qualityErr.Error(), "score": qualityErr.Score, "missing": qualityErr.Missing})
 	default:
 		c.JSON(500, gin.H{"message": "internal server error"})
 	}

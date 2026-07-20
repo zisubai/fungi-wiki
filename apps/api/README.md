@@ -96,7 +96,7 @@ GET /api/species?functionTag=biocontrol&temperature=30&ph=7.0&safetyLevel=BSL-1&
 
 - `limit`：每页数量，默认 20，最大 100。
 - `offset`：结果偏移量。
-- `sort`：`updated`、`name`、`quality` 或 `oldest`。
+- `sort`：`relevance`、`updated`、`name`、`quality` 或 `oldest`。`relevance` 在有关键词时按拉丁名、中文名、Slug 和别名的相似度排序。
 
 列表响应包含：
 

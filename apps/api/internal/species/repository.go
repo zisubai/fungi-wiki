@@ -17,11 +17,95 @@ var ErrDuplicateSlug = errors.New("species slug already exists")
 
 type Repository interface {
 	List(ctx context.Context, params ListParams) (ListResult, error)
+	Compare(ctx context.Context, ids []string) ([]Comparison, error)
+	Quality(ctx context.Context, idOrSlug string) (QualityReport, error)
 	Get(ctx context.Context, idOrSlug string) (Species, error)
 	Create(ctx context.Context, input CreateInput) (Species, error)
 	Update(ctx context.Context, idOrSlug string, input UpdateInput) (Species, error)
 	Archive(ctx context.Context, idOrSlug string) error
 	Delete(ctx context.Context, idOrSlug string) error
+}
+
+func (repo *PostgresRepository) Quality(ctx context.Context, idOrSlug string) (QualityReport, error) {
+	var score float64
+	completed := make([]bool, 10)
+	err := repo.pool.QueryRow(ctx, `
+		SELECT data_quality_score,
+		       NULLIF(BTRIM(latin_name), '') IS NOT NULL,
+		       NULLIF(BTRIM(chinese_name), '') IS NOT NULL,
+		       NULLIF(BTRIM(strain_number), '') IS NOT NULL,
+		       NULLIF(BTRIM(source_environment), '') IS NOT NULL,
+		       NULLIF(BTRIM(safety_level), '') IS NOT NULL,
+		       NULLIF(BTRIM(summary), '') IS NOT NULL,
+		       EXISTS(SELECT 1 FROM species_aliases sa WHERE sa.species_id=species.id),
+		       EXISTS(SELECT 1 FROM species_functions sf WHERE sf.species_id=species.id),
+		       EXISTS(SELECT 1 FROM culture_conditions cc WHERE cc.species_id=species.id),
+		       EXISTS(SELECT 1 FROM evidences e WHERE e.species_id=species.id)
+		FROM species WHERE id::text=$1 OR slug=$1 LIMIT 1
+	`, idOrSlug).Scan(&score, &completed[0], &completed[1], &completed[2], &completed[3], &completed[4], &completed[5], &completed[6], &completed[7], &completed[8], &completed[9])
+	if errors.Is(err, pgx.ErrNoRows) {
+		return QualityReport{}, ErrNotFound
+	}
+	if err != nil {
+		return QualityReport{}, err
+	}
+	return buildQualityReport(score, completed), nil
+}
+
+func buildQualityReport(score float64, completed []bool) QualityReport {
+	definitions := []struct {
+		key, label string
+		weight     int
+	}{
+		{"latinName", "拉丁学名", 10}, {"chineseName", "中文名", 5}, {"strainNumber", "保藏/菌株编号", 5},
+		{"sourceEnvironment", "来源环境", 10}, {"safetyLevel", "安全等级", 10}, {"summary", "菌种摘要", 15},
+		{"aliases", "别名与同义词", 5}, {"functions", "功能标签关联", 15}, {"cultureConditions", "培养条件", 10},
+		{"evidences", "文献证据", 15},
+	}
+	components := make([]QualityComponent, 0, len(definitions))
+	for index, definition := range definitions {
+		components = append(components, QualityComponent{Key: definition.key, Label: definition.label, Weight: definition.weight, Completed: index < len(completed) && completed[index]})
+	}
+	return QualityReport{Score: score, Components: components}
+}
+
+func (repo *PostgresRepository) Compare(ctx context.Context, ids []string) ([]Comparison, error) {
+	rows, err := repo.pool.Query(ctx, `
+		SELECT s.id::text, s.slug, s.latin_name, COALESCE(s.chinese_name, ''), COALESCE(s.strain_number, ''),
+		       COALESCE(s.source_environment, ''), COALESCE(s.safety_level, ''), s.is_model_organism,
+		       COALESCE(s.summary, ''), s.status, s.data_quality_score, s.created_at, s.updated_at, s.published_at,
+		       COALESCE(array_agg(DISTINCT ft.name) FILTER (WHERE ft.name IS NOT NULL), '{}'),
+		       MIN(cc.temperature_min), MAX(cc.temperature_max), MIN(cc.ph_min), MAX(cc.ph_max),
+		       COUNT(DISTINCT e.id)
+		FROM species s
+		LEFT JOIN species_functions sf ON sf.species_id = s.id
+		LEFT JOIN function_tags ft ON ft.id = sf.function_tag_id
+		LEFT JOIN culture_conditions cc ON cc.species_id = s.id
+		LEFT JOIN evidences e ON e.species_id = s.id
+		WHERE s.status = 'published' AND (s.id::text = ANY($1) OR s.slug = ANY($1))
+		GROUP BY s.id
+		ORDER BY array_position($1::text[], s.slug), s.latin_name
+	`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]Comparison, 0, len(ids))
+	for rows.Next() {
+		var item Comparison
+		err = rows.Scan(
+			&item.ID, &item.Slug, &item.LatinName, &item.ChineseName, &item.StrainNumber,
+			&item.SourceEnvironment, &item.SafetyLevel, &item.IsModelOrganism, &item.Summary,
+			&item.Status, &item.DataQualityScore, &item.CreatedAt, &item.UpdatedAt, &item.PublishedAt,
+			&item.FunctionTags, &item.TemperatureMin, &item.TemperatureMax, &item.PHMin, &item.PHMax,
+			&item.EvidenceCount,
+		)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 type PostgresRepository struct {
@@ -44,10 +128,20 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) (Li
 
 	where := []string{"1 = 1"}
 	args := make([]any, 0)
+	searchQueryIndex := 0
 
 	if params.Query != "" {
-		args = append(args, "%"+strings.TrimSpace(params.Query)+"%")
-		where = append(where, fmt.Sprintf("(slug ILIKE $%d OR latin_name ILIKE $%d OR chinese_name ILIKE $%d OR summary ILIKE $%d OR EXISTS (SELECT 1 FROM species_aliases sa WHERE sa.species_id=species.id AND sa.alias_name ILIKE $%d))", len(args), len(args), len(args), len(args), len(args)))
+		query := strings.TrimSpace(params.Query)
+		args = append(args, "%"+query+"%")
+		patternIndex := len(args)
+		args = append(args, query)
+		searchQueryIndex = len(args)
+		where = append(where, fmt.Sprintf(`(
+			slug ILIKE $%d OR latin_name ILIKE $%d OR chinese_name ILIKE $%d OR summary ILIKE $%d
+			OR similarity(slug, $%d) >= 0.25 OR similarity(latin_name, $%d) >= 0.25
+			OR similarity(COALESCE(chinese_name, ''), $%d) >= 0.25
+			OR EXISTS (SELECT 1 FROM species_aliases sa WHERE sa.species_id=species.id AND (sa.alias_name ILIKE $%d OR similarity(sa.alias_name, $%d) >= 0.25))
+		)`, patternIndex, patternIndex, patternIndex, patternIndex, searchQueryIndex, searchQueryIndex, searchQueryIndex, patternIndex, searchQueryIndex))
 	}
 
 	if params.Status != "" {
@@ -101,6 +195,14 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) (Li
 	}
 	orderBy := "updated_at DESC"
 	switch params.Sort {
+	case "relevance":
+		if searchQueryIndex > 0 {
+			orderBy = fmt.Sprintf(`GREATEST(
+				similarity(slug, $%d), similarity(latin_name, $%d),
+				similarity(COALESCE(chinese_name, ''), $%d),
+				COALESCE((SELECT MAX(similarity(sa.alias_name, $%d)) FROM species_aliases sa WHERE sa.species_id=species.id), 0)
+			) DESC, data_quality_score DESC`, searchQueryIndex, searchQueryIndex, searchQueryIndex, searchQueryIndex)
+		}
 	case "name":
 		orderBy = "latin_name ASC"
 	case "quality":

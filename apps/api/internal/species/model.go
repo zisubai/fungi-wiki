@@ -46,6 +46,28 @@ type ListResult struct {
 	Total int
 }
 
+type Comparison struct {
+	Species
+	FunctionTags   []string `json:"functionTags"`
+	TemperatureMin *float64 `json:"temperatureMin"`
+	TemperatureMax *float64 `json:"temperatureMax"`
+	PHMin          *float64 `json:"phMin"`
+	PHMax          *float64 `json:"phMax"`
+	EvidenceCount  int      `json:"evidenceCount"`
+}
+
+type QualityComponent struct {
+	Key       string `json:"key"`
+	Label     string `json:"label"`
+	Weight    int    `json:"weight"`
+	Completed bool   `json:"completed"`
+}
+
+type QualityReport struct {
+	Score      float64            `json:"score"`
+	Components []QualityComponent `json:"components"`
+}
+
 type CreateInput struct {
 	Slug              string `json:"slug" binding:"required"`
 	LatinName         string `json:"latinName" binding:"required"`

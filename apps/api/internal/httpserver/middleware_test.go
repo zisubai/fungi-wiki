@@ -69,3 +69,38 @@ func TestSecurityHeadersMiddleware(t *testing.T) {
 		}
 	}
 }
+
+func TestCORSMiddlewareAllowsConfiguredOrigins(t *testing.T) {
+	router := gin.New()
+	router.Use(corsMiddleware("http://localhost:5173, https://admin.example.com"))
+	router.OPTIONS("/api/test", func(ctx *gin.Context) { ctx.Status(http.StatusNoContent) })
+	request := httptest.NewRequest(http.MethodOptions, "/api/test", nil)
+	request.Header.Set("Origin", "https://admin.example.com")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("status = %d", response.Code)
+	}
+	if got := response.Header().Get("Access-Control-Allow-Origin"); got != "https://admin.example.com" {
+		t.Fatalf("allow origin = %q", got)
+	}
+	if got := response.Header().Get("Access-Control-Expose-Headers"); got != "X-Request-ID" {
+		t.Fatalf("expose headers = %q", got)
+	}
+}
+
+func TestCORSMiddlewareRejectsUnknownPreflightOrigin(t *testing.T) {
+	router := gin.New()
+	router.Use(corsMiddleware("http://localhost:5173"))
+	router.OPTIONS("/api/test", func(ctx *gin.Context) { ctx.Status(http.StatusNoContent) })
+	request := httptest.NewRequest(http.MethodOptions, "/api/test", nil)
+	request.Header.Set("Origin", "https://untrusted.example.com")
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", response.Code)
+	}
+	if got := response.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("unexpected allow origin %q", got)
+	}
+}

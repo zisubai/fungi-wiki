@@ -1,7 +1,8 @@
 export type SpeciesStatus = 'draft' | 'pending_review' | 'published' | 'archived';
-export type ActiveMenu = '菌种管理' | '功能标签' | '批量导入' | '文献证据' | '数据审核' | '搜索分析' | '账号管理' | '推荐质量';
+export type ActiveMenu = '菌种管理' | '功能标签' | '批量导入' | '文献证据' | '数据审核' | '数据质量' | '搜索分析' | '账号管理' | '推荐质量';
 export type Species = { id:string;slug:string;latinName:string;chineseName:string;strainNumber:string;sourceEnvironment:string;safetyLevel:string;isModelOrganism:boolean;summary:string;status:SpeciesStatus;dataQualityScore:number;createdAt:string;updatedAt:string;publishedAt?:string };
 export type SpeciesPayload = Omit<Species, 'id'|'dataQualityScore'|'createdAt'|'updatedAt'|'publishedAt'>;
+export type SpeciesQualityReport = { score:number;components:{key:string;label:string;weight:number;completed:boolean}[] };
 export type FunctionTag = { id:string;parentId:string;name:string;code:string;description:string;sortOrder:number;createdAt:string;updatedAt:string };
 export type FunctionTagPayload = Pick<FunctionTag,'parentId'|'name'|'code'|'description'|'sortOrder'>;
 export type SpeciesFunction = { functionTagId:string;functionTagName:string };
@@ -14,5 +15,6 @@ export type ImportBatch = { id:string;sourceFilename:string;totalRows:number;suc
 export type AuthUser = { id:string;email:string;displayName:string;role:'operator'|'expert'|'admin';status?:string };
 export type LoginResponse = { token:string;expiresAt:string;user:AuthUser };
 export type SearchReport = { days:number;totalSearches:number;noResultSearches:number;distinctQueries:number;popularQueries:{query:string;count:number;averageResults:number}[];noResultQueries:{query:string;count:number}[] };
-export type RecommendationQuality = { total:number;helpful:number;unhelpful:number;records:{id:string;requirement:string;parsedIntent:Record<string,unknown>;items:{latinName:string;score:number}[];modelName:string;riskLevel:string;helpfulCount:number;unhelpfulCount:number;createdAt:string}[] };
+export type RecommendationQuality = { total:number;helpful:number;unhelpful:number;records:{id:string;requirement:string;parsedIntent:Record<string,unknown>;items:{latinName:string;score:number}[];modelName:string;riskLevel:string;helpfulCount:number;unhelpfulCount:number;createdAt:string}[];combinations?:{id:string;functionTags:string[];safetyLevel:string;items:{members:{latinName:string}[];score:number;compatible:boolean}[];modelName:string;riskLevel:string;helpfulCount:number;unhelpfulCount:number;experiments:{id:string;candidateIndex:number;candidateMembers:{latinName:string}[];outcome:'compatible'|'incompatible'|'inconclusive';temperature?:number;ph?:number;notes:string;createdAt:string}[];createdAt:string}[] };
+export type DataQualityOverview = { total:number;averageScore:number;complete:number;needsCompletion:number;incomplete:number;missing:{key:string;label:string;count:number}[];prioritySpecies:{id:string;slug:string;latinName:string;status:string;score:number}[] };
 export type ListResponse<T> = { items:T[] };

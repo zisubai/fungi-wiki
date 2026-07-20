@@ -19,6 +19,16 @@ func (r *handlerFakeRepo) List(_ context.Context, params ListParams) (ListResult
 	r.params = params
 	return ListResult{Items: []Species{r.item}, Total: 1}, nil
 }
+func (r *handlerFakeRepo) Compare(_ context.Context, ids []string) ([]Comparison, error) {
+	items := make([]Comparison, 0, len(ids))
+	for _, id := range ids {
+		items = append(items, Comparison{Species: Species{ID: id, Slug: id, Status: StatusPublished}})
+	}
+	return items, nil
+}
+func (r *handlerFakeRepo) Quality(context.Context, string) (QualityReport, error) {
+	return buildQualityReport(70, []bool{true, true}), nil
+}
 func (r *handlerFakeRepo) Get(context.Context, string) (Species, error)         { return r.item, nil }
 func (r *handlerFakeRepo) Create(context.Context, CreateInput) (Species, error) { return r.item, nil }
 func (r *handlerFakeRepo) Update(context.Context, string, UpdateInput) (Species, error) {
@@ -77,5 +87,30 @@ func TestListRejectsInvalidPH(t *testing.T) {
 	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/species?ph=15", nil))
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", response.Code)
+	}
+}
+
+func TestCompareRequiresTwoToThreeUniqueSpecies(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	RegisterPublicRoutes(router.Group("/api/species"), &handlerFakeRepo{})
+
+	invalid := httptest.NewRecorder()
+	router.ServeHTTP(invalid, httptest.NewRequest(http.MethodGet, "/api/species/compare?ids=one,one", nil))
+	if invalid.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", invalid.Code)
+	}
+
+	valid := httptest.NewRecorder()
+	router.ServeHTTP(valid, httptest.NewRequest(http.MethodGet, "/api/species/compare?ids=one,two", nil))
+	if valid.Code != http.StatusOK || !strings.Contains(valid.Body.String(), `"slug":"two"`) {
+		t.Fatalf("unexpected comparison response: %d %s", valid.Code, valid.Body.String())
+	}
+}
+
+func TestQualityReportIncludesMissingComponents(t *testing.T) {
+	report := buildQualityReport(15, []bool{true, true})
+	if report.Score != 15 || len(report.Components) != 10 || report.Components[0].Completed != true || report.Components[2].Completed != false {
+		t.Fatalf("unexpected quality report: %+v", report)
 	}
 }

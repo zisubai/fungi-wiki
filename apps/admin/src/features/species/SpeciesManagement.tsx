@@ -1,11 +1,17 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { request } from '../../api';
 import { Messages, PageHeader } from '../../components/Common';
-import type { CultureCondition, FunctionTag, ListResponse, Species, SpeciesAlias, SpeciesFunction, SpeciesPayload, SpeciesStatus } from '../../types';
+import type { CultureCondition, FunctionTag, ListResponse, Species, SpeciesAlias, SpeciesFunction, SpeciesPayload, SpeciesQualityReport, SpeciesStatus } from '../../types';
 
 const emptySpecies: SpeciesPayload = { slug: '', latinName: '', chineseName: '', strainNumber: '', sourceEnvironment: '', safetyLevel: 'BSL-1', isModelOrganism: false, summary: '', status: 'draft' };
 const emptyCulture: CultureCondition = { mediumName: '', temperatureMin: null, temperatureMax: null, phMin: null, phMax: null, oxygenRequirement: '', cultureTime: '', notes: '' };
 const statusLabels: Record<SpeciesStatus, string> = { draft: '草稿', pending_review: '待审核', published: '已发布', archived: '已归档' };
+
+function qualityLabel(score: number) {
+  if (score >= 80) return '完整';
+  if (score >= 60) return '待补充';
+  return '不完整';
+}
 
 function payloadOf(species: Species): SpeciesPayload {
   const { slug, latinName, chineseName, strainNumber, sourceEnvironment, safetyLevel, isModelOrganism, summary, status } = species;
@@ -26,6 +32,7 @@ export function SpeciesManagement() {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [culture, setCulture] = useState<CultureCondition>(emptyCulture);
   const [aliasesText, setAliasesText] = useState('');
+  const [qualityReport, setQualityReport] = useState<SpeciesQualityReport | null>(null);
   const editingTitle = useMemo(() => editingId ? '编辑菌种' : '新增菌种', [editingId]);
 
   async function loadSpecies() {
@@ -46,18 +53,20 @@ export function SpeciesManagement() {
   }, []);
 
   function update<K extends keyof SpeciesPayload>(key: K, value: SpeciesPayload[K]) { setForm((current) => ({ ...current, [key]: value })); }
-  function startCreate() { setEditingId(null); setForm(emptySpecies); setSelectedTagIds([]); setCulture(emptyCulture); setAliasesText(''); setError(''); }
+  function startCreate() { setEditingId(null); setForm(emptySpecies); setSelectedTagIds([]); setCulture(emptyCulture); setAliasesText(''); setQualityReport(null); setError(''); }
   async function startEdit(species: Species) {
     const id = species.slug || species.id; setEditingId(id); setForm(payloadOf(species)); setError(''); setNotice('');
     try {
-      const [functions, conditions, aliases] = await Promise.all([
+      const [functions, conditions, aliases, quality] = await Promise.all([
         request<ListResponse<SpeciesFunction>>(`/api/admin/species/${id}/functions`),
         request<ListResponse<CultureCondition>>(`/api/admin/species/${id}/culture-conditions`),
         request<ListResponse<SpeciesAlias>>(`/api/admin/species/${id}/aliases`),
+        request<SpeciesQualityReport>(`/api/admin/species/${id}/quality`),
       ]);
       setSelectedTagIds(functions.items.map((item) => item.functionTagId));
       setCulture(conditions.items[0] ?? emptyCulture);
       setAliasesText(aliases.items.map((item) => item.name).join('\n'));
+      setQualityReport(quality);
     } catch (e) { setError(e instanceof Error ? e.message : '菌种关联数据加载失败'); }
   }
 
@@ -93,8 +102,9 @@ export function SpeciesManagement() {
     <PageHeader title="菌种管理" description="维护微生物百科与功能菌数据库的基础菌种主数据。" action={<button className="primary" onClick={startCreate}>新增菌种</button>} />
     <section className="toolbar"><input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && loadSpecies()} placeholder="搜索 slug、拉丁名、中文名或摘要" /><select value={status} onChange={(e) => setStatus(e.target.value)}><option value="">全部状态</option><option value="draft">草稿</option><option value="pending_review">待审核</option><option value="published">已发布</option><option value="archived">已归档</option></select><button onClick={loadSpecies} disabled={loading}>{loading ? '加载中...' : '查询'}</button></section>
     <Messages error={error} notice={notice} />
-    <section className="mainGrid"><div className="panel tablePanel"><div className="panelTitle"><h3>菌种列表</h3><span>{items.length} 条</span></div><div className="tableWrap"><table><thead><tr><th>拉丁名</th><th>中文名</th><th>安全等级</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody>{items.map((species) => <tr key={species.id}><td><strong>{species.latinName}</strong><small>{species.slug}</small></td><td>{species.chineseName || '-'}</td><td>{species.safetyLevel || '-'}</td><td><span className={`status ${species.status}`}>{statusLabels[species.status]}</span></td><td>{new Date(species.updatedAt).toLocaleString()}</td><td className="actions"><button onClick={() => void startEdit(species)}>编辑</button>{species.status === 'draft' && <button onClick={() => submitForReview(species)}>提交审核</button>}<button className="danger" onClick={() => archive(species)}>归档</button></td></tr>)}{!items.length && <tr><td colSpan={6} className="empty">暂无数据，请新增菌种或调整查询条件。</td></tr>}</tbody></table></div></div>
+    <section className="mainGrid"><div className="panel tablePanel"><div className="panelTitle"><h3>菌种列表</h3><span>{items.length} 条</span></div><div className="tableWrap"><table><thead><tr><th>拉丁名</th><th>中文名</th><th>安全等级</th><th>数据质量</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead><tbody>{items.map((species) => <tr key={species.id}><td><strong>{species.latinName}</strong><small>{species.slug}</small></td><td>{species.chineseName || '-'}</td><td>{species.safetyLevel || '-'}</td><td><strong>{Math.round(species.dataQualityScore)} 分</strong><small>{qualityLabel(species.dataQualityScore)}</small></td><td><span className={`status ${species.status}`}>{statusLabels[species.status]}</span></td><td>{new Date(species.updatedAt).toLocaleString()}</td><td className="actions"><button onClick={() => void startEdit(species)}>编辑</button>{species.status === 'draft' && <button onClick={() => submitForReview(species)}>提交审核</button>}<button className="danger" onClick={() => archive(species)}>归档</button></td></tr>)}{!items.length && <tr><td colSpan={7} className="empty">暂无数据，请新增菌种或调整查询条件。</td></tr>}</tbody></table></div></div>
       <form className="panel formPanel" onSubmit={submit}><div className="panelTitle"><h3>{editingTitle}</h3>{editingId && <button type="button" onClick={startCreate}>取消编辑</button>}</div>
+        {qualityReport && <section className="qualityChecklist"><div><strong>数据完整度</strong><span>{Math.round(qualityReport.score)} / 100</span></div><progress max="100" value={qualityReport.score} /><p>提交审核要求至少 60 分，且安全等级、摘要、功能、培养条件和文献证据齐全。</p><ul>{qualityReport.components.map((component) => <li className={component.completed ? 'complete' : 'missing'} key={component.key}><span>{component.completed ? '✓' : '!'} {component.label}</span><small>{component.weight} 分</small></li>)}</ul></section>}
         <label><span>Slug *</span><input required value={form.slug} onChange={(e) => update('slug', e.target.value)} placeholder="bacillus-subtilis" /></label>
         <label><span>拉丁名 *</span><input required value={form.latinName} onChange={(e) => update('latinName', e.target.value)} placeholder="Bacillus subtilis" /></label>
         <label><span>中文名</span><input value={form.chineseName} onChange={(e) => update('chineseName', e.target.value)} /></label>

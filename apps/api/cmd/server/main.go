@@ -37,7 +37,10 @@ func main() {
 		log.Fatalf("bootstrap admin: %v (apply migration 004_users_and_roles.sql first)", err)
 	}
 
-	router := httpserver.NewRouter(cfg, pool)
+	router, err := httpserver.NewRouter(cfg, pool)
+	if err != nil {
+		log.Fatalf("configure HTTP router: %v", err)
+	}
 
 	server := newHTTPServer(cfg.HTTPAddr, router)
 	runCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

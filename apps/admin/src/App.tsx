@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { authTokenKey, request } from './api';
-import { RecommendationQualityPage, SearchAnalytics } from './features/analytics/AnalyticsPages';
+import { DataQualityPage, RecommendationQualityPage, SearchAnalytics } from './features/analytics/AnalyticsPages';
 import { AuditManagement } from './features/audit/AuditManagement';
 import { LoginPage } from './features/auth/LoginPage';
 import { EvidenceManagement } from './features/evidence/EvidenceManagement';
@@ -10,7 +10,7 @@ import { FunctionTagManagement } from './features/tags/FunctionTagManagement';
 import { UserManagement } from './features/users/UserManagement';
 import type { ActiveMenu, AuthUser } from './types';
 
-const menus: ActiveMenu[] = ['菌种管理', '功能标签', '批量导入', '文献证据', '数据审核', '搜索分析', '账号管理', '推荐质量'];
+const menus: ActiveMenu[] = ['菌种管理', '功能标签', '批量导入', '文献证据', '数据审核', '数据质量', '搜索分析', '账号管理', '推荐质量'];
 
 function menusFor(user: AuthUser): ActiveMenu[] {
   if (user.role === 'admin') return menus;
@@ -52,6 +52,7 @@ export function App() {
     {currentMenu === '批量导入' && <ImportManagement />}
     {currentMenu === '文献证据' && <EvidenceManagement />}
     {currentMenu === '数据审核' && <AuditManagement />}
+    {currentMenu === '数据质量' && <DataQualityPage />}
     {currentMenu === '搜索分析' && <SearchAnalytics />}
     {currentMenu === '账号管理' && <UserManagement />}
     {currentMenu === '推荐质量' && <RecommendationQualityPage />}

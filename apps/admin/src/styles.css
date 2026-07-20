@@ -6,6 +6,8 @@
 
 .tagFieldset { border: 1px solid #d9e4dc; border-radius: 10px; padding: 12px; }
 .tagFieldset legend { padding: 0 6px; color: #52645a; font-size: 13px; }
+.qualityChecklist { background: #f7faf8; border: 1px solid #d9e8df; border-radius: 12px; margin-bottom: 14px; padding: 13px; }.qualityChecklist > div { display: flex; justify-content: space-between; }.qualityChecklist > div span { color: #26705a; font-weight: 700; }.qualityChecklist progress { accent-color: #26705a; margin: 9px 0; width: 100%; }.qualityChecklist ul { display: grid; gap: 5px; grid-template-columns: 1fr 1fr; list-style: none; margin: 0; padding: 0; }.qualityChecklist li { display: flex; font-size: 12px; justify-content: space-between; }.qualityChecklist li.complete { color: #37705c; }.qualityChecklist li.missing { color: #a45d18; }.qualityChecklist li small { color: inherit; }
+.qualityChecklist p { color: #718079; font-size: 12px; margin: 0 0 9px; }
 .tagOptions { display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .tagOptions .checkbox { margin: 0; width: auto; }
 .inlineInputs { display: flex; gap: 8px; }
@@ -33,6 +35,7 @@
 .candidateSummary { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
 .candidateSummary span { background: #eef5f2; border-radius: 999px; color: #36594e; font-size: 12px; padding: 6px 9px; }
 .qualityFeedback { color: #718079; font-size: 13px; margin-top: 12px; }
+.combinationAudit { margin-top: 18px; }
 
 * {
   box-sizing: border-box;
@@ -48,8 +51,9 @@ body {
 .currentUser strong,.currentUser span { display: block; }.currentUser span { color: #9eb9b1; font-size: 12px; margin-top: 6px; overflow-wrap: anywhere; }
 .sidebar .logoutButton { color: #ffb8b1; margin-top: 24px; }
 .analyticsStats { display: grid; gap: 18px; grid-template-columns: repeat(3,1fr); margin: 28px 0 20px; }.analyticsStats article { background: white; border: 1px solid #edf0ef; border-radius: 18px; padding: 22px; }.analyticsStats strong,.analyticsStats span { display: block; }.analyticsStats strong { font-size: 34px; }.analyticsStats span { color: #718079; margin-top: 5px; }
+.analyticsStats.qualityStats { grid-template-columns: repeat(4,1fr); }.queryRow small { color: #8a9691; display: block; margin-top: 4px; }
 .analyticsGrid { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }.queryRow { align-items: center; border-bottom: 1px solid #eef2f1; display: flex; justify-content: space-between; padding: 13px 0; }.queryRow span { color: #718079; font-size: 13px; }.queryRow.warning strong { color: #a65a00; }
-@media (max-width: 800px) { .analyticsStats,.analyticsGrid { grid-template-columns: 1fr; } }
+@media (max-width: 800px) { .analyticsStats,.analyticsStats.qualityStats,.analyticsGrid { grid-template-columns: 1fr; } }
 
 button,
 input,
@@ -382,3 +386,13 @@ code {
   color: #17633d;
   padding: 4px 7px;
 }
+
+.experimentHistory { background: #f7faf9; border-radius: 10px; margin-top: 14px; padding: 12px; }
+.experimentHistory > div { border-top: 1px solid #e5ece9; margin-top: 8px; padding-top: 8px; }
+.experimentHistory span { color: #17633d; font-weight: 700; margin-right: 12px; }
+.experimentHistory small { color: #718079; }
+.experimentHistory p { margin: 6px 0 0; }
+.experimentForm { align-items: center; display: grid; gap: 8px; grid-template-columns: auto repeat(3, minmax(100px, 1fr)) minmax(180px, 2fr) auto; margin-top: 12px; }
+.experimentForm input, .experimentForm select { min-width: 0; }
+.experimentForm small { grid-column: 1 / -1; }
+@media (max-width: 1180px) { .experimentForm { grid-template-columns: 1fr 1fr; } }

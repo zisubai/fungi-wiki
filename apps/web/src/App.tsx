@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { request } from './api';
 import { RecommendationPanel } from './features/recommend/RecommendationPanel';
+import { CombinationPanel } from './features/recommend/CombinationPanel';
 import { SearchHero } from './features/search/SearchHero';
-import { SpeciesDetailPanel, SpeciesListPanel } from './features/species/SpeciesPanels';
-import type { CultureCondition, Evidence, FunctionTag, ListResponse, RecommendationResponse, SearchFilters, Species, SpeciesAlias, SpeciesFunction } from './types';
+import { SpeciesComparisonPanel, SpeciesDetailPanel, SpeciesListPanel } from './features/species/SpeciesPanels';
+import type { CultureCondition, Evidence, FunctionTag, ListResponse, RecommendationResponse, SearchFilters, Species, SpeciesAlias, SpeciesComparison, SpeciesFunction } from './types';
 const emptyFilters: SearchFilters = { functionTag: '', temperature: '', ph: '', safetyLevel: '', sourceEnvironment: '' };
 
 function getRouteSpeciesSlug() {
@@ -32,9 +33,10 @@ export function App() {
   const [functionTags, setFunctionTags] = useState<FunctionTag[]>([]);
   const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState<SearchFilters>(emptyFilters);
-  const [total, setTotal] = useState(0); const [page, setPage] = useState(1); const pageSize = 10; const [sort, setSort] = useState('updated');
+  const [total, setTotal] = useState(0); const [page, setPage] = useState(1); const pageSize = 10; const [sort, setSort] = useState('relevance');
   const [recommendRequirement, setRecommendRequirement] = useState(''); const [recommendFunction, setRecommendFunction] = useState(''); const [recommending, setRecommending] = useState(false); const [recommendation, setRecommendation] = useState<RecommendationResponse | null>(null);
   const [recommendFeedback, setRecommendFeedback] = useState('');
+  const [compareIds, setCompareIds] = useState<string[]>([]); const [comparison, setComparison] = useState<SpeciesComparison[]>([]); const [comparisonLoading, setComparisonLoading] = useState(false);
 
   const stats = useMemo(() => {
     const modelCount = items.filter((item) => item.isModelOrganism).length;
@@ -97,11 +99,13 @@ export function App() {
   }
 
   function resetSearch() {
-    setQuery(''); setFilters(emptyFilters); setSort('updated'); void loadSpecies('', emptyFilters, 1, 'updated');
+    setQuery(''); setFilters(emptyFilters); setSort('relevance'); void loadSpecies('', emptyFilters, 1, 'relevance');
   }
 
   async function submitRecommendation(event: FormEvent) { event.preventDefault(); setRecommending(true); setError(''); setRecommendFeedback(''); try { const payload = { requirement: recommendRequirement, functionTag: recommendFunction || undefined, temperature: filters.temperature ? Number(filters.temperature) : undefined, ph: filters.ph ? Number(filters.ph) : undefined, safetyLevel: filters.safetyLevel || undefined, sourceEnvironment: filters.sourceEnvironment || undefined, limit: 5 }; setRecommendation(await request<RecommendationResponse>('/api/recommendations', { method: 'POST', body: JSON.stringify(payload) })); } catch (err) { setError(err instanceof Error ? err.message : '推荐失败'); } finally { setRecommending(false); } }
   async function sendRecommendationFeedback(feedbackType: 'helpful' | 'unhelpful') { if (!recommendation) return; const content = window.prompt(feedbackType === 'helpful' ? '哪些内容对你有帮助？（可选）' : '推荐哪里不符合需求？（可选）') ?? ''; try { await request(`/api/recommendations/${recommendation.recordId}/feedback`, { method: 'POST', body: JSON.stringify({ feedbackType, content }) }); setRecommendFeedback(feedbackType); } catch (err) { setError(err instanceof Error ? err.message : '反馈提交失败'); } }
+  function toggleCompare(id: string) { setCompareIds((current) => current.includes(id) ? current.filter((item) => item !== id) : current.length < 3 ? [...current, id] : current); }
+  async function loadComparison() { if (compareIds.length < 2) return; setComparisonLoading(true); setError(''); try { const data = await request<{items:SpeciesComparison[]}>(`/api/species/compare?ids=${encodeURIComponent(compareIds.join(','))}`); setComparison(data.items); } catch (err) { setError(err instanceof Error ? err.message : '加载对比失败'); } finally { setComparisonLoading(false); } }
 
   useEffect(() => {
     const handlePopState = () => setRouteSlug(getRouteSpeciesSlug());
@@ -126,6 +130,7 @@ export function App() {
     <main className="page">
       <SearchHero routeSlug={routeSlug} query={query} loading={loading} filters={filters} functionTags={functionTags} onBack={() => navigateTo('/')} onQueryChange={setQuery} onFiltersChange={setFilters} onSubmit={submitSearch} />
       <RecommendationPanel requirement={recommendRequirement} functionCode={recommendFunction} recommending={recommending} recommendation={recommendation} feedback={recommendFeedback} functionTags={functionTags} onRequirementChange={setRecommendRequirement} onFunctionChange={setRecommendFunction} onSubmit={submitRecommendation} onOpenSpecies={(slug) => void loadDetail(slug)} onFeedback={(type) => void sendRecommendationFeedback(type)} />
+      <CombinationPanel functionTags={functionTags} onOpenSpecies={(slug) => void loadDetail(slug)} />
 
       <section className="stats">
         <article>
@@ -145,9 +150,10 @@ export function App() {
       {error && <div className="message error">{error}</div>}
 
       <section className={`contentGrid ${routeSlug ? 'detailRoute' : ''}`}>
-        <SpeciesListPanel items={items} selectedId={selected?.id} loading={loading} submittedQuery={submittedQuery} activeFilterCount={activeFilterCount} page={page} pageSize={pageSize} total={total} sort={sort} appliedFilters={appliedFilters} onReset={resetSearch} onSort={(value) => void loadSpecies(submittedQuery, appliedFilters, 1, value)} onPage={(target) => void loadSpecies(submittedQuery, appliedFilters, target)} onSelect={(slug) => void loadDetail(slug)} />
+        <SpeciesListPanel items={items} selectedId={selected?.id} loading={loading} submittedQuery={submittedQuery} activeFilterCount={activeFilterCount} page={page} pageSize={pageSize} total={total} sort={sort} appliedFilters={appliedFilters} compareIds={compareIds} onReset={resetSearch} onSort={(value) => void loadSpecies(submittedQuery, appliedFilters, 1, value)} onPage={(target) => void loadSpecies(submittedQuery, appliedFilters, target)} onSelect={(slug) => void loadDetail(slug)} onToggleCompare={toggleCompare} onCompare={() => void loadComparison()} />
         <SpeciesDetailPanel selected={selected} detailLoading={detailLoading} routeSlug={routeSlug} aliases={aliases} functions={speciesFunctions} conditions={cultureConditions} evidences={evidences} />
       </section>
+      <SpeciesComparisonPanel items={comparison} loading={comparisonLoading} onClose={() => { setComparison([]); setCompareIds([]); }} />
 
     </main>
   );

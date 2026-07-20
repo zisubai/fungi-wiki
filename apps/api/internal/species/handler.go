@@ -21,6 +21,7 @@ func NewHandler(repo Repository) *Handler {
 func RegisterPublicRoutes(router *gin.RouterGroup, repo Repository) {
 	handler := NewHandler(repo)
 	router.GET("", handler.ListPublished)
+	router.GET("/compare", handler.Compare)
 	router.GET("/:id", handler.GetPublished)
 }
 
@@ -28,10 +29,20 @@ func RegisterAdminRoutes(router *gin.RouterGroup, repo Repository) {
 	handler := NewHandler(repo)
 	router.GET("", handler.ListAll)
 	router.POST("", handler.Create)
+	router.GET("/:id/quality", handler.Quality)
 	router.GET("/:id", handler.Get)
 	router.PUT("/:id", handler.Update)
 	router.DELETE("/:id", handler.Archive)
 	router.DELETE("/:id/hard", handler.Delete)
+}
+
+func (handler *Handler) Quality(ctx *gin.Context) {
+	report, err := handler.repo.Quality(ctx.Request.Context(), ctx.Param("id"))
+	if err != nil {
+		respondError(ctx, err)
+		return
+	}
+	ctx.JSON(http.StatusOK, report)
 }
 
 func (handler *Handler) ListPublished(ctx *gin.Context) {
@@ -40,6 +51,36 @@ func (handler *Handler) ListPublished(ctx *gin.Context) {
 
 func (handler *Handler) ListAll(ctx *gin.Context) {
 	handler.list(ctx, ctx.Query("status"))
+}
+
+func (handler *Handler) Compare(ctx *gin.Context) {
+	rawIDs := strings.Split(ctx.Query("ids"), ",")
+	ids := make([]string, 0, len(rawIDs))
+	seen := make(map[string]struct{})
+	for _, id := range rawIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) < 2 || len(ids) > 3 {
+		ctx.JSON(http.StatusBadRequest, gin.H{"message": "select 2 to 3 unique species"})
+		return
+	}
+	items, err := handler.repo.Compare(ctx.Request.Context(), ids)
+	if err != nil {
+		respondError(ctx, err)
+		return
+	}
+	if len(items) != len(ids) {
+		ctx.JSON(http.StatusNotFound, gin.H{"message": "one or more published species were not found"})
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"items": items})
 }
 
 func (handler *Handler) list(ctx *gin.Context, status string) {
