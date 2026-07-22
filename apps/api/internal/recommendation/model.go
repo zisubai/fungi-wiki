@@ -115,15 +115,18 @@ type CombinationMember struct {
 }
 
 type Combination struct {
-	Members        []CombinationMember `json:"members"`
-	Score          float64             `json:"score"`
-	TemperatureMin *float64            `json:"temperatureMin"`
-	TemperatureMax *float64            `json:"temperatureMax"`
-	PHMin          *float64            `json:"phMin"`
-	PHMax          *float64            `json:"phMax"`
-	Compatible     bool                `json:"compatible"`
-	Reasons        []string            `json:"reasons"`
-	Warning        string              `json:"warning,omitempty"`
+	Members                 []CombinationMember `json:"members"`
+	Score                   float64             `json:"score"`
+	TemperatureMin          *float64            `json:"temperatureMin"`
+	TemperatureMax          *float64            `json:"temperatureMax"`
+	PHMin                   *float64            `json:"phMin"`
+	PHMax                   *float64            `json:"phMax"`
+	Compatible              bool                `json:"compatible"`
+	ValidationStatus        string              `json:"validationStatus"`
+	CompatibleExperiments   int                 `json:"compatibleExperiments"`
+	IncompatibleExperiments int                 `json:"incompatibleExperiments"`
+	Reasons                 []string            `json:"reasons"`
+	Warning                 string              `json:"warning,omitempty"`
 }
 
 type CombinationResponse struct {

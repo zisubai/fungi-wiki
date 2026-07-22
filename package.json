@@ -1,6 +1,6 @@
 {
   "name": "fungi-wiki",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Microbial encyclopedia, functional strain database, intelligent search, AI recommendation and synthetic biology design assistant.",
   "workspaces": [
@@ -22,6 +22,7 @@
     "test:api": "cd apps/api && go test ./...",
     "vet:api": "cd apps/api && go vet ./...",
     "verify:frontend": "npm run test:admin:coverage && npm run test:web:coverage && npm run build:web && npm run build:admin",
-    "verify": "npm run verify:frontend && npm run vet:api && npm run test:api && npm run build:api"
+    "verify": "npm run verify:frontend && npm run vet:api && npm run test:api && npm run build:api",
+    "release:check": "./scripts/release-check.sh"
   }
 }

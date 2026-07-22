@@ -58,3 +58,25 @@ func TestRankCombinationsPrefersCompatiblePair(t *testing.T) {
 		t.Fatalf("expected compatible pair first: %+v", items)
 	}
 }
+
+func TestRankCombinationsUsesExperimentValidation(t *testing.T) {
+	min, max, phMin, phMax := 20.0, 30.0, 6.0, 8.0
+	first := []combinationCandidate{
+		{member: CombinationMember{ID: "unverified"}, quality: 100, temperatureMin: &min, temperatureMax: &max, phMin: &phMin, phMax: &phMax},
+		{member: CombinationMember{ID: "confirmed"}, quality: 80, temperatureMin: &min, temperatureMax: &max, phMin: &phMin, phMax: &phMax},
+	}
+	second := []combinationCandidate{{member: CombinationMember{ID: "target"}, quality: 80, temperatureMin: &min, temperatureMax: &max, phMin: &phMin, phMax: &phMax}}
+	validations := map[string]combinationValidation{combinationKey("confirmed", "target"): {compatible: 2}}
+	items := rankCombinationsWithValidation(first, second, validations, 5)
+	if items[0].Members[0].ID != "confirmed" || items[0].ValidationStatus != "confirmed" || items[0].CompatibleExperiments != 2 {
+		t.Fatalf("expected experimentally confirmed pair first: %+v", items)
+	}
+}
+
+func TestApplyCombinationValidationWarnsOnContradiction(t *testing.T) {
+	item := Combination{Score: 90, Reasons: []string{}}
+	applyCombinationValidation(&item, combinationValidation{compatible: 1, incompatible: 3})
+	if item.ValidationStatus != "contradicted" || item.Score != 70 || !strings.Contains(item.Warning, "不兼容") {
+		t.Fatalf("expected contradicted result to be downgraded: %+v", item)
+	}
+}

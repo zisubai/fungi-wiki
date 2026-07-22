@@ -40,7 +40,11 @@ func (r *PostgresRepository) RecommendCombination(ctx context.Context, input Com
 	if err != nil {
 		return response, err
 	}
-	response.Items = rankCombinations(first, second, 5)
+	validations, err := r.loadCombinationValidations(ctx)
+	if err != nil {
+		return response, err
+	}
+	response.Items = rankCombinationsWithValidation(first, second, validations, 5)
 	inputJSON, _ := json.Marshal(input.FunctionTags)
 	itemsJSON, _ := json.Marshal(response.Items)
 	riskLevel := "low"
@@ -58,6 +62,39 @@ func (r *PostgresRepository) RecommendCombination(ctx context.Context, input Com
 		return response, err
 	}
 	return response, nil
+}
+
+type combinationValidation struct {
+	compatible   int
+	incompatible int
+}
+
+func (r *PostgresRepository) loadCombinationValidations(ctx context.Context) (map[string]combinationValidation, error) {
+	rows, err := r.pool.Query(ctx, `SELECT candidate_members,outcome FROM combination_experiments WHERE jsonb_array_length(candidate_members)=2 ORDER BY created_at DESC LIMIT 1000`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	validations := make(map[string]combinationValidation)
+	for rows.Next() {
+		var membersJSON []byte
+		var outcome string
+		if err = rows.Scan(&membersJSON, &outcome); err != nil {
+			return nil, err
+		}
+		var members []CombinationMember
+		if json.Unmarshal(membersJSON, &members) != nil || len(members) != 2 {
+			continue
+		}
+		validation := validations[combinationKey(members[0].ID, members[1].ID)]
+		if outcome == "compatible" {
+			validation.compatible++
+		} else if outcome == "incompatible" {
+			validation.incompatible++
+		}
+		validations[combinationKey(members[0].ID, members[1].ID)] = validation
+	}
+	return validations, rows.Err()
 }
 
 func (r *PostgresRepository) listCombinationCandidates(ctx context.Context, tag, safetyLevel string) ([]combinationCandidate, error) {
@@ -94,6 +131,10 @@ func (r *PostgresRepository) listCombinationCandidates(ctx context.Context, tag,
 }
 
 func rankCombinations(first, second []combinationCandidate, limit int) []Combination {
+	return rankCombinationsWithValidation(first, second, nil, limit)
+}
+
+func rankCombinationsWithValidation(first, second []combinationCandidate, validations map[string]combinationValidation, limit int) []Combination {
 	items := make([]Combination, 0)
 	seen := make(map[string]struct{})
 	for _, left := range first {
@@ -101,17 +142,20 @@ func rankCombinations(first, second []combinationCandidate, limit int) []Combina
 			if left.member.ID == right.member.ID {
 				continue
 			}
-			ids := []string{left.member.ID, right.member.ID}
-			sort.Strings(ids)
-			key := strings.Join(ids, ":")
+			key := combinationKey(left.member.ID, right.member.ID)
 			if _, exists := seen[key]; exists {
 				continue
 			}
 			seen[key] = struct{}{}
-			items = append(items, buildCombination(left, right))
+			item := buildCombination(left, right)
+			applyCombinationValidation(&item, validations[key])
+			items = append(items, item)
 		}
 	}
 	sort.SliceStable(items, func(i, j int) bool {
+		if validationPriority(items[i].ValidationStatus) != validationPriority(items[j].ValidationStatus) {
+			return validationPriority(items[i].ValidationStatus) > validationPriority(items[j].ValidationStatus)
+		}
 		if items[i].Compatible != items[j].Compatible {
 			return items[i].Compatible
 		}
@@ -124,6 +168,43 @@ func rankCombinations(first, second []combinationCandidate, limit int) []Combina
 		items = items[:limit]
 	}
 	return items
+}
+
+func combinationKey(first, second string) string {
+	ids := []string{first, second}
+	sort.Strings(ids)
+	return strings.Join(ids, ":")
+}
+
+func applyCombinationValidation(item *Combination, validation combinationValidation) {
+	item.CompatibleExperiments = validation.compatible
+	item.IncompatibleExperiments = validation.incompatible
+	item.ValidationStatus = "unverified"
+	if validation.compatible > validation.incompatible {
+		item.ValidationStatus = "confirmed"
+		item.Score = math.Min(100, item.Score+5)
+		item.Reasons = append(item.Reasons, fmt.Sprintf("已有 %d 次共培养实验验证兼容", validation.compatible))
+	} else if validation.incompatible > validation.compatible {
+		item.ValidationStatus = "contradicted"
+		item.Score = math.Max(0, item.Score-20)
+		item.Warning = fmt.Sprintf("已有 %d 次实验记录为不兼容，不建议直接采用该组合。", validation.incompatible)
+	} else if validation.compatible > 0 {
+		item.ValidationStatus = "inconclusive"
+		item.Reasons = append(item.Reasons, "历史实验结论存在分歧，需继续验证")
+	}
+}
+
+func validationPriority(status string) int {
+	switch status {
+	case "confirmed":
+		return 3
+	case "unverified", "inconclusive":
+		return 2
+	case "contradicted":
+		return 1
+	default:
+		return 0
+	}
 }
 
 func combinationEvidenceCount(item Combination) int {

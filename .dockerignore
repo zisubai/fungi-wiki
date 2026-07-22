@@ -1,0 +1,11 @@
+.git
+.github
+**/node_modules
+**/dist
+**/coverage
+**/*.test.tsx
+**/*.tsbuildinfo
+apps/api/server
+.env
+.env.*
+!.env.example

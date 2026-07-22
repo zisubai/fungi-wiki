@@ -1,6 +1,6 @@
 # Fungi Wiki 微生物百科
 
-Fungi Wiki 是一个从微生物百科逐步演进到合成生物设计辅助平台的项目。
+Fungi Wiki 1.0 是一个从微生物百科逐步演进到合成生物设计辅助平台的可交付 MVP。
 
 ```text
 微生物百科 → 功能菌数据库 → 菌种智能搜索 → AI 菌种推荐 → 合成生物设计辅助平台
@@ -55,6 +55,7 @@ scripts/               开发和数据库脚本
 - 组合菌需求、候选快照、算法版本和风险等级持久化审计
 - 组合菌建议有用性反馈与运营端逐条质量跟踪
 - 组合菌候选级共培养实验结果录入与历史追踪（菌种快照、结论、温度、pH、备注）
+- 基于历史共培养实验的组合推荐加权、降级排序和验证状态展示
 - 推荐结果关联可核验的文献证据链并保存快照
 - 菌种数据完整度自动评分，关联数据变更后实时刷新
 - 运营端数据质量明细和缺失项补全清单
@@ -69,7 +70,7 @@ scripts/               开发和数据库脚本
 - Go 1.22 或更高版本
 - Node.js 20 或更高版本
 - npm 10 或更高版本
-- Docker Desktop 或其他可用的 Docker daemon
+- Docker Desktop（含 Compose v2）或其他可用的 Docker daemon + Compose
 
 ## 快速启动
 
@@ -110,6 +111,25 @@ npm run dev:admin
 ```text
 postgres://fungi:fungi@localhost:55432/fungi_wiki?sslmode=disable
 ```
+
+## Docker 一键部署
+
+完整交付环境包含 PostgreSQL、Go API、用户端和运营端：
+
+```bash
+JWT_SECRET='请替换为高强度随机值' \
+ADMIN_PASSWORD='请替换管理员密码' \
+docker compose up -d --build
+```
+
+查看状态和停止服务：
+
+```bash
+docker compose ps
+docker compose down
+```
+
+PostgreSQL 数据保存在 `postgres_data` volume 中，`docker compose down` 不会删除数据。仅在明确需要清空本地数据时使用 `docker compose down -v`。
 
 ## 数据库迁移
 
@@ -169,6 +189,7 @@ npm run vet:api
 npm run build:web
 npm run build:admin
 npm run verify
+npm run release:check
 ```
 
 `npm run verify` 会执行用户端和运营端覆盖率门禁、前后端构建及 Go 测试，适合提交代码前一次性检查。CI 会将 HTML 报告保存为 `web-coverage` 和 `admin-coverage` 构建产物。
@@ -196,6 +217,7 @@ GitHub Actions 会在每次 push 和 pull request 时自动执行运营端测试
 - [数据库表结构设计](docs/数据库表结构设计.md)
 - [本地开发启动说明](docs/本地开发启动说明.md)
 - [Go API 使用说明](apps/api/README.md)
+- [MVP 交付验收](docs/MVP交付验收.md)
 
 ## 演进路线
 
@@ -204,3 +226,5 @@ GitHub Actions 会在每次 push 和 pull request 时自动执行运营端测试
 3. 建设基于证据和规则的菌种推荐。
 4. 引入向量检索和可解释 AI 推荐。
 5. 扩展到底盘菌、代谢通路和合成生物设计辅助。
+
+当前代码已完成第 1–3 阶段及基于规则和实验反馈的第 4 阶段 MVP。第 5 阶段属于后续产品建设范围，不以未经验证的自动化设计替代专家和实验审核。
