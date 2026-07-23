@@ -1,0 +1,8 @@
+[
+  {"id":"exact-latin","query":"Bacillus subtilis","expectedSlugs":["bacillus-subtilis"]},
+  {"id":"exact-chinese","query":"枯草芽孢杆菌","expectedSlugs":["bacillus-subtilis"]},
+  {"id":"synonym-biocontrol","query":"病害防控","expectedSlugs":["bacillus-subtilis"]},
+  {"id":"fermentation","query":"发酵生产","expectedSlugs":["saccharomyces-cerevisiae"]},
+  {"id":"natural-language-biological-control","query":"寻找能够抑制植物病原菌的安全菌种","expectedSlugs":["bacillus-subtilis"]},
+  {"id":"natural-language-fermentation","query":"适合食品生物制造和酿造的微生物","expectedSlugs":["saccharomyces-cerevisiae"]}
+]

@@ -1,0 +1,28 @@
+import { FormEvent, useEffect, useState } from 'react';
+import { request } from '../../api';
+import { Messages, PageHeader } from '../../components/Common';
+import type { ApplicationCase, ListResponse, Species, SpeciesVersion } from '../../types';
+
+const emptyCase = { industry: '', scenario: '', problem: '', solution: '', resultSummary: '', maturityLevel: '', source: '' };
+
+export function DataAssetsManagement() {
+  const [species, setSpecies] = useState<Species[]>([]); const [selected, setSelected] = useState('');
+  const [cases, setCases] = useState<ApplicationCase[]>([]); const [versions, setVersions] = useState<SpeciesVersion[]>([]);
+  const [form, setForm] = useState(emptyCase); const [editingID, setEditingID] = useState('');
+  const [error, setError] = useState(''); const [notice, setNotice] = useState('');
+
+  useEffect(() => { void request<ListResponse<Species>>('/api/admin/species?limit=100&sort=name').then((data) => { setSpecies(data.items); if (data.items[0]) setSelected(data.items[0].slug || data.items[0].id); }).catch((e) => setError(e instanceof Error ? e.message : '菌种加载失败')); }, []);
+  useEffect(() => { if (selected) void loadAssets(selected); }, [selected]);
+  async function loadAssets(id = selected) { setError(''); try { const [caseData, versionData] = await Promise.all([request<ListResponse<ApplicationCase>>(`/api/admin/species/${id}/application-cases`), request<ListResponse<SpeciesVersion>>(`/api/admin/species/${id}/versions`)]); setCases(caseData.items); setVersions(versionData.items); } catch (e) { setError(e instanceof Error ? e.message : '数据资产加载失败'); } }
+  async function submit(event: FormEvent) { event.preventDefault(); setError(''); setNotice(''); try { await request(`/api/admin/species/${selected}/application-cases${editingID ? `/${editingID}` : ''}`, { method: editingID ? 'PUT' : 'POST', body: JSON.stringify(form) }); setForm(emptyCase); setEditingID(''); setNotice(editingID ? '应用案例已更新' : '应用案例已新增'); await loadAssets(); } catch (e) { setError(e instanceof Error ? e.message : '保存失败'); } }
+  function edit(item: ApplicationCase) { const { industry, scenario, problem, solution, resultSummary, maturityLevel, source } = item; setForm({ industry, scenario, problem, solution, resultSummary, maturityLevel, source }); setEditingID(item.id); }
+  async function remove(item: ApplicationCase) { if (!window.confirm(`确认删除应用案例“${item.scenario}”？`)) return; try { await request(`/api/admin/species/${selected}/application-cases/${item.id}`, { method: 'DELETE' }); setNotice('应用案例已删除'); await loadAssets(); } catch (e) { setError(e instanceof Error ? e.message : '删除失败'); } }
+
+  return <section className="content"><PageHeader title="应用与版本" description="维护功能菌应用案例，并追踪主数据及关联数据的每次变更。" />
+    <section className="toolbar"><select aria-label="选择菌种" value={selected} onChange={(e) => setSelected(e.target.value)}>{species.map((item) => <option key={item.id} value={item.slug || item.id}>{item.latinName} / {item.chineseName}</option>)}</select><button onClick={() => void loadAssets()} disabled={!selected}>刷新</button></section><Messages error={error} notice={notice} />
+    <section className="mainGrid"><div className="panel tablePanel"><div className="panelTitle"><h3>应用案例</h3><span>{cases.length} 条</span></div>{cases.map((item) => <article className="assetCard" key={item.id}><div><strong>{item.scenario}</strong><span>{item.industry} · {item.maturityLevel || '成熟度未标注'}</span></div><p>{item.resultSummary || item.solution || item.problem || '暂无案例说明'}</p><small>{item.source || '来源未标注'}</small><div className="actions"><button onClick={() => edit(item)}>编辑</button><button className="danger" onClick={() => void remove(item)}>删除</button></div></article>)}{!cases.length && <div className="empty">暂无应用案例。</div>}</div>
+      <form className="panel formPanel" onSubmit={submit}><div className="panelTitle"><h3>{editingID ? '编辑应用案例' : '新增应用案例'}</h3>{editingID && <button type="button" onClick={() => { setEditingID(''); setForm(emptyCase); }}>取消</button>}</div>
+        <label><span>行业 *</span><input required value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} placeholder="农业 / 环保 / 食品" /></label><label><span>应用场景 *</span><input required value={form.scenario} onChange={(e) => setForm({ ...form, scenario: e.target.value })} /></label><label><span>待解决问题</span><textarea value={form.problem} onChange={(e) => setForm({ ...form, problem: e.target.value })} /></label><label><span>应用方案</span><textarea value={form.solution} onChange={(e) => setForm({ ...form, solution: e.target.value })} /></label><label><span>结果摘要</span><textarea value={form.resultSummary} onChange={(e) => setForm({ ...form, resultSummary: e.target.value })} /></label><label><span>成熟度</span><input value={form.maturityLevel} onChange={(e) => setForm({ ...form, maturityLevel: e.target.value })} placeholder="实验室验证 / 中试 / 产业化" /></label><label><span>来源</span><input value={form.source} onChange={(e) => setForm({ ...form, source: e.target.value })} /></label><button className="primary full">保存案例</button></form></section>
+    <section className="panel versionPanel"><div className="panelTitle"><div><h3>数据版本记录</h3><p>菌种、别名、功能、培养条件、证据和应用案例变更均自动留痕。</p></div><span>{versions.length} 个版本</span></div><div className="tableWrap"><table><thead><tr><th>版本</th><th>变更类型</th><th>数据模块</th><th>记录时间</th></tr></thead><tbody>{versions.map((item) => <tr key={item.id}><td><strong>v{item.versionNumber}</strong></td><td>{item.changeType}</td><td>{item.sourceTable}</td><td>{new Date(item.createdAt).toLocaleString()}</td></tr>)}{!versions.length && <tr><td colSpan={4} className="empty">暂无版本记录。</td></tr>}</tbody></table></div></section>
+  </section>;
+}

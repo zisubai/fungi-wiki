@@ -11,13 +11,20 @@ describe('public App', () => {
   beforeEach(() => {
     requestMock.mockReset();
     requestMock.mockImplementation((path: string, options?: RequestInit) => {
-      if (path.startsWith('/api/species?')) return Promise.resolve({ items: [species], total: 1, limit: 10, offset: 0 });
+      if (path.startsWith('/api/search?')) return Promise.resolve({ items: [species], total: 1, limit: 10, offset: 0, semanticEnabled: true, expandedTerms: [] });
       if (path === '/api/function-tags?limit=200') return Promise.resolve({ items: [{ id: 'tag-1', name: '生防', code: 'biocontrol' }, { id: 'tag-2', name: '发酵', code: 'fermentation' }] });
       if (path === '/api/species/bacillus-test') return Promise.resolve(species);
       if (path.endsWith('/functions')) return Promise.resolve({ items: [{ functionTagId: 'tag-1', functionTagName: '生防' }] });
       if (path.endsWith('/culture-conditions')) return Promise.resolve({ items: [] });
       if (path.endsWith('/evidences')) return Promise.resolve({ items: [] });
       if (path.endsWith('/aliases')) return Promise.resolve({ items: [] });
+      if (path.endsWith('/application-cases')) return Promise.resolve({ items: [] });
+      if (path === '/api/auth/login') return Promise.resolve({ token: 'user-token', user: { id: 'user-1', email: 'user@example.com', displayName: '测试用户', role: 'member' } });
+      if (path === '/api/auth/register') return Promise.resolve({ token: 'new-token', user: { id: 'user-2', email: 'new@example.com', displayName: '新用户', role: 'member' } });
+      if (path === '/api/auth/me') return Promise.resolve({ id: 'user-1', email: 'user@example.com', displayName: '测试用户', role: 'member' });
+      if (path === '/api/me/favorites') return Promise.resolve({ items: [] });
+      if (path === '/api/me/search-history') return Promise.resolve({ items: [{ id: 'history-1', query: '历史生防', filters: { functionTag: 'biocontrol' }, resultCount: 1, createdAt: '2026-01-01' }] });
+      if (path.startsWith('/api/me/favorites/')) return Promise.resolve(undefined);
       if (path === '/api/recommendations/combinations' && options?.method === 'POST') return Promise.resolve({ recordId: 'combination-1', items: [{ members: [{ id: 'species-1', slug: 'bacillus-test', latinName: 'Bacillus test', chineseName: '测试菌', safetyLevel: 'BSL-1', functionTags: ['biocontrol'], evidenceCount: 1 }, { id: 'species-2', slug: 'yeast', latinName: 'Saccharomyces cerevisiae', chineseName: '酿酒酵母', safetyLevel: 'BSL-1', functionTags: ['fermentation'], evidenceCount: 1 }], score: 95, temperatureMin: 25, temperatureMax: 30, phMin: 6, phMax: 6, compatible: true, reasons: ['功能互补'] }], disclaimer: '需要实验验证' });
       if (path === '/api/recommendations/combinations/combination-1/feedback' && options?.method === 'POST') return Promise.resolve({ message: 'ok' });
       if (path === '/api/recommendations' && options?.method === 'POST') {
@@ -86,5 +93,14 @@ describe('public App', () => {
     fireEvent.click(screen.getByRole('button', { name: '👍 有帮助' }));
     await waitFor(() => expect(requestMock).toHaveBeenCalledWith('/api/recommendations/recommend-1/feedback', { method: 'POST', body: JSON.stringify({ feedbackType: 'helpful', content: '候选理由清晰' }) }));
     expect(await screen.findByText('感谢反馈，我们会用于改进推荐质量。')).toBeInTheDocument();
+  });
+
+  it('登录后使用收藏和搜索历史', async () => {
+    render(<App />); await screen.findAllByText('Bacillus test'); fireEvent.change(screen.getByLabelText('用户邮箱'), { target: { value: 'user@example.com' } }); fireEvent.change(screen.getByLabelText('用户密码'), { target: { value: 'password1' } }); fireEvent.click(screen.getByRole('button', { name: '登录' }));
+    expect(await screen.findByText('测试用户 的资料库')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: '收藏当前菌种' })); await waitFor(() => expect(requestMock).toHaveBeenCalledWith('/api/me/favorites/bacillus-test', expect.objectContaining({ method: 'PUT' }))); fireEvent.click(screen.getByRole('button', { name: /历史生防/ })); await waitFor(() => expect(requestMock.mock.calls.some(([path]) => String(path).includes('q=%E5%8E%86%E5%8F%B2%E7%94%9F%E9%98%B2'))).toBe(true)); fireEvent.click(screen.getByRole('button', { name: '清空' })); await waitFor(() => expect(requestMock).toHaveBeenCalledWith('/api/me/search-history', { method: 'DELETE' })); fireEvent.click(screen.getByRole('button', { name: '退出' })); expect(screen.getByText('登录后可跨设备保存候选菌种和检索记录。')).toBeInTheDocument();
+  });
+
+  it('注册普通用户', async () => {
+    render(<App />); fireEvent.click(screen.getByRole('button', { name: '创建账号' })); fireEvent.change(screen.getByLabelText('显示名称'), { target: { value: '新用户' } }); fireEvent.change(screen.getByLabelText('用户邮箱'), { target: { value: 'new@example.com' } }); fireEvent.change(screen.getByLabelText('用户密码'), { target: { value: 'password1' } }); fireEvent.click(screen.getByRole('button', { name: '注册' })); await waitFor(() => expect(requestMock).toHaveBeenCalledWith('/api/auth/register', expect.objectContaining({ method: 'POST' }))); expect(await screen.findByText('新用户 的资料库')).toBeInTheDocument();
   });
 });

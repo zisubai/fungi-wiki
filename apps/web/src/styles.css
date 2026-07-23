@@ -17,6 +17,8 @@
 .evidenceCards article { border-left: 3px solid #78a886; background: #f7faf8; padding: 12px 14px; }
 .evidenceCards p { font-size: 14px; margin: 7px 0; }
 .evidenceCards a { color: #28603a; }
+.applicationCases { display: grid; gap: 10px; }.applicationCases article { background: #f7faf8; border-radius: 12px; padding: 14px; }.applicationCases article > div { display: flex; justify-content: space-between; gap: 12px; }.applicationCases span,.applicationCases small { color: #6f817b; font-size: 12px; }.applicationCases p { font-size: 13px; margin: 8px 0; }.applicationCases b { color: #486354; }
+.topicLibrary { margin-top: 20px; }.topicLibrary > div:last-child { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); }.topicLibrary button { background: white; border: 1px solid #dcebe6; border-radius: 16px; display: grid; gap: 6px; padding: 16px; text-align: left; }.topicLibrary button:hover { border-color: #52a78f; transform: translateY(-1px); }.topicLibrary button span { color: #16735f; font-size: 13px; }.topicLibrary button small { color: #718079; line-height: 1.4; }
 
 .recommendFeedback { align-items: center; display: flex; gap: 10px; justify-content: center; }
 .recommendFeedback span { color: #d5e9e2; font-size: 13px; }
@@ -346,3 +348,5 @@ dd {
 .contentGrid.detailRoute .detailPanel {
   border-color: #b8ded3;
 }
+.accountPanel { background: #153b34; border-radius: 24px; color: white; margin-top: 20px; padding: 24px; }.accountPanel>form { display: grid; gap: 10px; grid-template-columns: 1fr 1fr auto; }.accountPanel input,.accountPanel button { border: 0; border-radius: 10px; padding: 11px; }.accountHeader { align-items: center; display: flex; justify-content: space-between; }.accountHeader>div:last-child { display: flex; gap: 8px; }.accountGrid { display: grid; gap: 18px; grid-template-columns: 1fr 1fr; margin-top: 18px; }.accountGrid h3 { display:flex;justify-content:space-between }.savedItem { background: rgba(255,255,255,.1); color: white; display: flex; justify-content: space-between; margin-bottom: 6px; text-align:left; width:100%; }.savedItem span { color:#bed7cf;font-size:12px }.textButton { background:transparent!important;color:#bfe2d7;padding:0!important }
+.searchMode { color:#61766f;display:flex;font-size:13px;gap:14px;margin:12px 0 }.searchMode strong { color:#16735f }

@@ -1,4 +1,5 @@
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
+export const userTokenKey = 'fungi_user_token';
 
 export class ApiError extends Error {
   constructor(message: string, public readonly status: number, public readonly requestId: string) {
@@ -15,9 +16,10 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
   const requestId = new Headers(options?.headers).get('X-Request-ID') ?? createRequestId();
   let response: Response;
   try {
+    const token = localStorage.getItem(userTokenKey);
     response = await fetch(`${apiBaseUrl}${path}`, {
       ...options,
-      headers: { 'Content-Type': 'application/json', 'X-Request-ID': requestId, ...options?.headers },
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), 'X-Request-ID': requestId, ...options?.headers },
     });
   } catch (cause) {
     throw new ApiError(cause instanceof Error ? cause.message : '网络请求失败', 0, requestId);

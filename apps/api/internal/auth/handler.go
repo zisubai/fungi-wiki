@@ -16,7 +16,26 @@ func NewHandler(r Repository, t *TokenService) *Handler { return &Handler{r, t} 
 func RegisterRoutes(r *gin.RouterGroup, repo Repository, tokens *TokenService) {
 	h := NewHandler(repo, tokens)
 	r.POST("/login", h.login)
+	r.POST("/register", h.register)
 	r.GET("/me", Authenticate(tokens), h.me)
+}
+func (h *Handler) register(c *gin.Context) {
+	var input RegisterInput
+	if e := c.ShouldBindJSON(&input); e != nil {
+		c.JSON(400, gin.H{"message": e.Error()})
+		return
+	}
+	user, e := h.repo.Create(c.Request.Context(), CreateUserInput{Email: input.Email, Password: input.Password, DisplayName: input.DisplayName, Role: "member"})
+	if e != nil {
+		c.JSON(409, gin.H{"message": "email already exists"})
+		return
+	}
+	token, expires, e := h.tokens.Issue(user)
+	if e != nil {
+		c.JSON(500, gin.H{"message": "internal server error"})
+		return
+	}
+	c.JSON(http.StatusCreated, LoginResponse{token, expires, user})
 }
 func RegisterAdminRoutes(r *gin.RouterGroup, repo Repository) {
 	h := &Handler{repo: repo}
@@ -88,6 +107,18 @@ func Authenticate(tokens *TokenService) gin.HandlerFunc {
 		}
 		c.Set("userID", claims.Subject)
 		c.Set("role", claims.Role)
+		c.Next()
+	}
+}
+func OptionalAuthenticate(tokens *TokenService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		header := c.GetHeader("Authorization")
+		if strings.HasPrefix(header, "Bearer ") {
+			if claims, err := tokens.Parse(strings.TrimPrefix(header, "Bearer ")); err == nil {
+				c.Set("userID", claims.Subject)
+				c.Set("role", claims.Role)
+			}
+		}
 		c.Next()
 	}
 }

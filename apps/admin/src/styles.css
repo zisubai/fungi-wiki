@@ -396,3 +396,5 @@ code {
 .experimentForm input, .experimentForm select { min-width: 0; }
 .experimentForm small { grid-column: 1 / -1; }
 @media (max-width: 1180px) { .experimentForm { grid-template-columns: 1fr 1fr; } }
+.assetCard { border-bottom: 1px solid #e5eeeb; padding: 16px 0; }.assetCard > div:first-child { display: flex; justify-content: space-between; gap: 12px; }.assetCard span,.assetCard small { color: #70817b; font-size: 12px; }.assetCard p { color: #536962; }.assetCard .actions { margin-top: 10px; }.versionPanel { margin-top: 20px; }
+.inlineConfigForm { border-top: 1px solid #e3ece9; display: grid; gap: 8px; grid-template-columns: 1fr 1fr auto; margin-top: 14px; padding-top: 14px; }.inlineConfigForm input,.inlineConfigForm button { border: 1px solid #cbded8; border-radius: 8px; padding: 9px; }

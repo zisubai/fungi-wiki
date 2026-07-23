@@ -11,6 +11,9 @@ type Config struct {
 	AdminPassword  string
 	CORSOrigins    string
 	TrustedProxies string
+	EmbeddingURL   string
+	EmbeddingKey   string
+	EmbeddingModel string
 }
 
 func Load() Config {
@@ -23,6 +26,9 @@ func Load() Config {
 		AdminPassword:  getEnv("ADMIN_PASSWORD", "admin123456"),
 		CORSOrigins:    getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:5174"),
 		TrustedProxies: getEnv("TRUSTED_PROXIES", "127.0.0.1,::1"),
+		EmbeddingURL:   getEnv("EMBEDDING_API_URL", ""),
+		EmbeddingKey:   getEnv("EMBEDDING_API_KEY", ""),
+		EmbeddingModel: getEnv("EMBEDDING_MODEL", "text-embedding-3-small"),
 	}
 }
 

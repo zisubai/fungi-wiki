@@ -11,20 +11,24 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"fungi-wiki/apps/api/internal/applicationcase"
 	"fungi-wiki/apps/api/internal/audit"
 	"fungi-wiki/apps/api/internal/auth"
 	"fungi-wiki/apps/api/internal/config"
 	"fungi-wiki/apps/api/internal/culturecondition"
 	"fungi-wiki/apps/api/internal/dataquality"
+	"fungi-wiki/apps/api/internal/embedding"
 	"fungi-wiki/apps/api/internal/evidence"
 	"fungi-wiki/apps/api/internal/functiontag"
 	"fungi-wiki/apps/api/internal/health"
 	"fungi-wiki/apps/api/internal/importjob"
 	"fungi-wiki/apps/api/internal/recommendation"
 	"fungi-wiki/apps/api/internal/searchanalytics"
+	"fungi-wiki/apps/api/internal/smartsearch"
 	"fungi-wiki/apps/api/internal/species"
 	"fungi-wiki/apps/api/internal/speciesalias"
 	"fungi-wiki/apps/api/internal/speciesfunction"
+	"fungi-wiki/apps/api/internal/speciesversion"
 )
 
 func NewRouter(cfg config.Config, pool *pgxpool.Pool) (*gin.Engine, error) {
@@ -51,6 +55,10 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) (*gin.Engine, error) {
 	speciesAliasRepo := speciesalias.NewPostgresRepository(pool)
 	recommendationRepo := recommendation.NewPostgresRepository(pool)
 	dataQualityRepo := dataquality.NewPostgresRepository(pool)
+	applicationCaseRepo := applicationcase.NewPostgresRepository(pool)
+	speciesVersionRepo := speciesversion.NewPostgresRepository(pool)
+	embeddingProvider := embedding.NewClient(cfg.EmbeddingURL, cfg.EmbeddingKey, cfg.EmbeddingModel)
+	searchRepo := smartsearch.NewRepository(pool, embeddingProvider)
 
 	api := router.Group("/api")
 	{
@@ -61,9 +69,12 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) (*gin.Engine, error) {
 		culturecondition.RegisterPublicRoutes(publishedSpecies, cultureRepo)
 		evidence.RegisterPublicRoutes(publishedSpecies, evidenceRepo)
 		speciesalias.RegisterPublicRoutes(publishedSpecies, speciesAliasRepo)
+		applicationcase.RegisterPublicRoutes(publishedSpecies, applicationCaseRepo)
 		functiontag.RegisterPublicRoutes(api.Group("/function-tags"), functionTagRepo)
 		recommendation.RegisterPublicRoutes(api.Group("/recommendations"), recommendationRepo)
 		recommendation.RegisterFeedbackRoutes(api.Group("/recommendations"), recommendationRepo)
+		smartsearch.RegisterPublicRoutes(api.Group("/search", auth.OptionalAuthenticate(tokenService)), searchRepo)
+		smartsearch.RegisterUserRoutes(api.Group("/me", auth.Authenticate(tokenService)), searchRepo)
 
 		admin := api.Group("/admin", auth.Authenticate(tokenService), auth.AuthorizeAdmin())
 		{
@@ -72,6 +83,8 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) (*gin.Engine, error) {
 			culturecondition.RegisterAdminRoutes(admin.Group("/species"), cultureRepo)
 			evidence.RegisterAdminRoutes(admin.Group("/species"), evidenceRepo)
 			speciesalias.RegisterAdminRoutes(admin.Group("/species"), speciesAliasRepo)
+			applicationcase.RegisterAdminRoutes(admin.Group("/species"), applicationCaseRepo)
+			speciesversion.RegisterAdminRoutes(admin.Group("/species"), speciesVersionRepo)
 			functiontag.RegisterAdminRoutes(admin.Group("/function-tags"), functionTagRepo)
 			audit.RegisterAdminRoutes(admin.Group("/audits"), auditRepo)
 			importjob.RegisterAdminRoutes(admin.Group("/imports"), importRepo)
@@ -79,6 +92,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool) (*gin.Engine, error) {
 			searchanalytics.RegisterAdminRoutes(admin.Group("/search-analytics"), searchAnalyticsRepo)
 			recommendation.RegisterAdminRoutes(admin.Group("/recommendations"), recommendationRepo)
 			dataquality.RegisterAdminRoutes(admin.Group("/data-quality"), dataQualityRepo)
+			smartsearch.RegisterAdminRoutes(admin.Group("/search-config"), searchRepo)
 		}
 	}
 

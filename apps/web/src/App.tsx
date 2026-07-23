@@ -3,8 +3,9 @@ import { request } from './api';
 import { RecommendationPanel } from './features/recommend/RecommendationPanel';
 import { CombinationPanel } from './features/recommend/CombinationPanel';
 import { SearchHero } from './features/search/SearchHero';
+import { AccountPanel } from './features/account/AccountPanel';
 import { SpeciesComparisonPanel, SpeciesDetailPanel, SpeciesListPanel } from './features/species/SpeciesPanels';
-import type { CultureCondition, Evidence, FunctionTag, ListResponse, RecommendationResponse, SearchFilters, Species, SpeciesAlias, SpeciesComparison, SpeciesFunction } from './types';
+import type { ApplicationCase, CultureCondition, Evidence, FunctionTag, ListResponse, RecommendationResponse, SearchFilters, SearchHistory, Species, SpeciesAlias, SpeciesComparison, SpeciesFunction, User } from './types';
 const emptyFilters: SearchFilters = { functionTag: '', temperature: '', ph: '', safetyLevel: '', sourceEnvironment: '' };
 
 function getRouteSpeciesSlug() {
@@ -30,6 +31,9 @@ export function App() {
   const [cultureConditions, setCultureConditions] = useState<CultureCondition[]>([]);
   const [evidences, setEvidences] = useState<Evidence[]>([]);
   const [aliases, setAliases] = useState<SpeciesAlias[]>([]);
+  const [applicationCases, setApplicationCases] = useState<ApplicationCase[]>([]);
+  const [user,setUser]=useState<User|null>(null); const [favorites,setFavorites]=useState<Species[]>([]); const [history,setHistory]=useState<SearchHistory[]>([]);
+  const [semanticEnabled,setSemanticEnabled]=useState(false); const [expandedTerms,setExpandedTerms]=useState<string[]>([]);
   const [functionTags, setFunctionTags] = useState<FunctionTag[]>([]);
   const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState<SearchFilters>(emptyFilters);
@@ -52,11 +56,12 @@ export function App() {
       if (search.trim()) params.set('q', search.trim());
       Object.entries(nextFilters).forEach(([key, value]) => { if (value.trim()) params.set(key, value.trim()); });
       params.set('limit', String(pageSize)); params.set('offset', String((targetPage - 1) * pageSize)); params.set('sort', nextSort);
-      const data = await request<ListResponse>(`/api/species?${params.toString()}`);
+      const data = await request<ListResponse & {semanticEnabled?:boolean;expandedTerms?:string[]}>(`/api/search?${params.toString()}`);
       setItems(data.items);
       setTotal(data.total); setPage(targetPage); setSort(nextSort);
       setSubmittedQuery(search.trim());
       setAppliedFilters(nextFilters);
+      setSemanticEnabled(Boolean(data.semanticEnabled)); setExpandedTerms(data.expandedTerms ?? []);
       if (!routeSlug && data.items.length > 0) {
         await loadDetail(data.items[0].slug || data.items[0].id, false);
       } else if (!routeSlug) {
@@ -75,14 +80,16 @@ export function App() {
     try {
       const data = await request<Species>(`/api/species/${idOrSlug}`);
       setSelected(data);
-      const [functionData, conditionData, evidenceData, aliasData] = await Promise.all([
+      const [functionData, conditionData, evidenceData, aliasData, caseData] = await Promise.all([
         request<{ items: SpeciesFunction[] }>(`/api/species/${data.slug || data.id}/functions`),
         request<{ items: CultureCondition[] }>(`/api/species/${data.slug || data.id}/culture-conditions`),
         request<{ items: Evidence[] }>(`/api/species/${data.slug || data.id}/evidences`),
         request<{ items: SpeciesAlias[] }>(`/api/species/${data.slug || data.id}/aliases`),
+        request<{ items: ApplicationCase[] }>(`/api/species/${data.slug || data.id}/application-cases`),
       ]);
       setSpeciesFunctions(functionData.items); setCultureConditions(conditionData.items); setEvidences(evidenceData.items);
       setAliases(aliasData.items);
+      setApplicationCases(caseData.items);
       if (shouldNavigate) {
         navigateTo(`/species/${encodeURIComponent(data.slug || data.id)}`);
       }
@@ -113,6 +120,15 @@ export function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  async function loadLibrary(){const [a,b]=await Promise.all([request<{items:Species[]}>('/api/me/favorites'),request<{items:SearchHistory[]}>('/api/me/search-history')]);setFavorites(a.items);setHistory(b.items)}
+  async function login(email:string,password:string){const data=await request<{token:string;user:User}>('/api/auth/login',{method:'POST',body:JSON.stringify({email,password})});localStorage.setItem('fungi_user_token',data.token);setUser(data.user);await loadLibrary()}
+  async function register(displayName:string,email:string,password:string){const data=await request<{token:string;user:User}>('/api/auth/register',{method:'POST',body:JSON.stringify({displayName,email,password})});localStorage.setItem('fungi_user_token',data.token);setUser(data.user);await loadLibrary()}
+  function logout(){localStorage.removeItem('fungi_user_token');setUser(null);setFavorites([]);setHistory([])}
+  async function toggleFavorite(item:Species){const exists=favorites.some(x=>x.id===item.id);await request(`/api/me/favorites/${item.slug||item.id}`,{method:exists?'DELETE':'PUT',body:exists?undefined:'{}'});await loadLibrary()}
+  function runHistory(item:SearchHistory){const next={...emptyFilters,...item.filters};setQuery(item.query);setFilters(next);void loadSpecies(item.query,next,1,'relevance')}
+  async function clearHistory(){await request('/api/me/search-history',{method:'DELETE'});setHistory([])}
+  useEffect(()=>{if(localStorage.getItem('fungi_user_token'))void request<User>('/api/auth/me').then(async u=>{setUser(u);await loadLibrary()}).catch(()=>logout())},[]);
+
   useEffect(() => {
     void loadSpecies('');
     void request<{ items: FunctionTag[] }>('/api/function-tags?limit=200').then((data) => setFunctionTags(data.items)).catch(() => undefined);
@@ -131,6 +147,10 @@ export function App() {
       <SearchHero routeSlug={routeSlug} query={query} loading={loading} filters={filters} functionTags={functionTags} onBack={() => navigateTo('/')} onQueryChange={setQuery} onFiltersChange={setFilters} onSubmit={submitSearch} />
       <RecommendationPanel requirement={recommendRequirement} functionCode={recommendFunction} recommending={recommending} recommendation={recommendation} feedback={recommendFeedback} functionTags={functionTags} onRequirementChange={setRecommendRequirement} onFunctionChange={setRecommendFunction} onSubmit={submitRecommendation} onOpenSpecies={(slug) => void loadDetail(slug)} onFeedback={(type) => void sendRecommendationFeedback(type)} />
       <CombinationPanel functionTags={functionTags} onOpenSpecies={(slug) => void loadDetail(slug)} />
+
+      <section className="topicLibrary"><div className="panelTitle"><div><h2>功能菌专题库</h2><p>按功能方向浏览已发布菌种</p></div></div><div>{functionTags.map((tag) => <button key={tag.id} onClick={() => { const next = { ...emptyFilters, functionTag: tag.code }; setFilters(next); void loadSpecies('', next, 1, 'quality'); }}><strong>{tag.name}</strong><span>{tag.publishedSpeciesCount ?? 0} 个菌种</span><small>{tag.description || '查看该功能方向的候选菌种'}</small></button>)}</div></section>
+      <section className="searchMode"><strong>{semanticEnabled ? '混合检索已启用' : '关键词与规则检索'}</strong>{expandedTerms.length>1&&<span>同义词扩展：{expandedTerms.slice(1).join('、')}</span>}</section>
+      <AccountPanel user={user} selected={selected} favorites={favorites} history={history} onLogin={login} onRegister={register} onLogout={logout} onToggleFavorite={(item)=>void toggleFavorite(item)} onRunHistory={runHistory} onClearHistory={()=>void clearHistory()} onOpenSpecies={(slug)=>void loadDetail(slug)}/>
 
       <section className="stats">
         <article>
@@ -151,7 +171,7 @@ export function App() {
 
       <section className={`contentGrid ${routeSlug ? 'detailRoute' : ''}`}>
         <SpeciesListPanel items={items} selectedId={selected?.id} loading={loading} submittedQuery={submittedQuery} activeFilterCount={activeFilterCount} page={page} pageSize={pageSize} total={total} sort={sort} appliedFilters={appliedFilters} compareIds={compareIds} onReset={resetSearch} onSort={(value) => void loadSpecies(submittedQuery, appliedFilters, 1, value)} onPage={(target) => void loadSpecies(submittedQuery, appliedFilters, target)} onSelect={(slug) => void loadDetail(slug)} onToggleCompare={toggleCompare} onCompare={() => void loadComparison()} />
-        <SpeciesDetailPanel selected={selected} detailLoading={detailLoading} routeSlug={routeSlug} aliases={aliases} functions={speciesFunctions} conditions={cultureConditions} evidences={evidences} />
+        <SpeciesDetailPanel selected={selected} detailLoading={detailLoading} routeSlug={routeSlug} aliases={aliases} functions={speciesFunctions} conditions={cultureConditions} evidences={evidences} applicationCases={applicationCases} />
       </section>
       <SpeciesComparisonPanel items={comparison} loading={comparisonLoading} onClose={() => { setComparison([]); setCompareIds([]); }} />
 

@@ -3,14 +3,15 @@ package functiontag
 import "time"
 
 type FunctionTag struct {
-	ID          string    `json:"id"`
-	ParentID    string    `json:"parentId"`
-	Name        string    `json:"name"`
-	Code        string    `json:"code"`
-	Description string    `json:"description"`
-	SortOrder   int       `json:"sortOrder"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID                    string    `json:"id"`
+	ParentID              string    `json:"parentId"`
+	Name                  string    `json:"name"`
+	Code                  string    `json:"code"`
+	Description           string    `json:"description"`
+	SortOrder             int       `json:"sortOrder"`
+	CreatedAt             time.Time `json:"createdAt"`
+	UpdatedAt             time.Time `json:"updatedAt"`
+	PublishedSpeciesCount int       `json:"publishedSpeciesCount"`
 }
 
 type ListParams struct {

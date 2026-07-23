@@ -106,3 +106,4 @@ jobs:
             sleep 1
           done
           ../../scripts/smoke-api.sh
+          go run ./cmd/search-eval -api http://localhost:8080 -dataset testdata/search-evaluation.json

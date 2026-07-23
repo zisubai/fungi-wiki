@@ -49,10 +49,11 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) ([]
 
 	args = append(args, limit, offset)
 	query := fmt.Sprintf(`
-		SELECT id::text, COALESCE(parent_id::text, ''), name, code, COALESCE(description, ''), sort_order, created_at, updated_at
-		FROM function_tags
+		SELECT ft.id::text, COALESCE(ft.parent_id::text, ''), ft.name, ft.code, COALESCE(ft.description, ''), ft.sort_order, ft.created_at, ft.updated_at,
+		       (SELECT COUNT(*) FROM species_functions sf JOIN species s ON s.id=sf.species_id WHERE sf.function_tag_id=ft.id AND s.status='published')
+		FROM function_tags ft
 		WHERE %s
-		ORDER BY sort_order ASC, name ASC
+		ORDER BY ft.sort_order ASC, ft.name ASC
 		LIMIT $%d OFFSET $%d
 	`, strings.Join(where, " AND "), len(args)-1, len(args))
 
@@ -75,9 +76,10 @@ func (repo *PostgresRepository) List(ctx context.Context, params ListParams) ([]
 
 func (repo *PostgresRepository) Get(ctx context.Context, idOrCode string) (FunctionTag, error) {
 	query := `
-		SELECT id::text, COALESCE(parent_id::text, ''), name, code, COALESCE(description, ''), sort_order, created_at, updated_at
-		FROM function_tags
-		WHERE id::text = $1 OR code = $1
+		SELECT ft.id::text, COALESCE(ft.parent_id::text, ''), ft.name, ft.code, COALESCE(ft.description, ''), ft.sort_order, ft.created_at, ft.updated_at,
+		       (SELECT COUNT(*) FROM species_functions sf JOIN species s ON s.id=sf.species_id WHERE sf.function_tag_id=ft.id AND s.status='published')
+		FROM function_tags ft
+		WHERE ft.id::text = $1 OR ft.code = $1
 		LIMIT 1
 	`
 
@@ -92,7 +94,7 @@ func (repo *PostgresRepository) Create(ctx context.Context, input CreateInput) (
 	query := `
 		INSERT INTO function_tags (parent_id, name, code, description, sort_order)
 		VALUES (NULLIF($1, '')::uuid, $2, $3, NULLIF($4, ''), $5)
-		RETURNING id::text, COALESCE(parent_id::text, ''), name, code, COALESCE(description, ''), sort_order, created_at, updated_at
+		RETURNING id::text, COALESCE(parent_id::text, ''), name, code, COALESCE(description, ''), sort_order, created_at, updated_at, 0
 	`
 
 	item, err := scanFunctionTag(repo.pool.QueryRow(ctx, query, input.ParentID, input.Name, input.Code, input.Description, input.SortOrder))
@@ -111,7 +113,7 @@ func (repo *PostgresRepository) Update(ctx context.Context, idOrCode string, inp
 		    description = NULLIF($5, ''),
 		    sort_order = $6
 		WHERE id::text = $1 OR code = $1
-		RETURNING id::text, COALESCE(parent_id::text, ''), name, code, COALESCE(description, ''), sort_order, created_at, updated_at
+		RETURNING id::text, COALESCE(parent_id::text, ''), name, code, COALESCE(description, ''), sort_order, created_at, updated_at, 0
 	`
 
 	item, err := scanFunctionTag(repo.pool.QueryRow(ctx, query, idOrCode, input.ParentID, input.Name, input.Code, input.Description, input.SortOrder))
@@ -150,6 +152,7 @@ func scanFunctionTag(row scanner) (FunctionTag, error) {
 		&item.SortOrder,
 		&item.CreatedAt,
 		&item.UpdatedAt,
+		&item.PublishedSpeciesCount,
 	)
 	return item, err
 }

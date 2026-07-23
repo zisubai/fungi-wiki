@@ -19,6 +19,7 @@
     "test:web": "npm --workspace apps/web run test",
     "test:web:coverage": "npm --workspace apps/web run test:coverage",
     "test:scripts": "./scripts/test-db-backup.sh",
+    "eval:search": "./scripts/evaluate-search.sh",
     "build:api": "cd apps/api && go build ./cmd/server",
     "test:api": "cd apps/api && go test ./...",
     "vet:api": "cd apps/api && go vet ./...",
