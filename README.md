@@ -131,6 +131,23 @@ docker compose down
 
 PostgreSQL 数据保存在 `postgres_data` volume 中，`docker compose down` 不会删除数据。仅在明确需要清空本地数据时使用 `docker compose down -v`。
 
+### 生产环境部署
+
+生产环境使用不含开发默认密码的独立 Compose 配置。先准备环境变量：
+
+```bash
+cp .env.production.example .env.production
+```
+
+将 `.env.production` 中的密码、JWT 密钥、管理员账号和正式域名全部替换后启动：
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env.production -f docker-compose.prod.yml ps
+```
+
+生产配置不会将 PostgreSQL 和 API 端口直接暴露到宿主机。用户端默认监听宿主机 `80`，管理端默认监听 `8081`，两者均通过容器内 Nginx 将 `/api/*` 请求转发给 API。公网部署时应在它们前面配置 TLS 反向代理，并限制管理端的网络访问范围。
+
 ## 数据库迁移
 
 Go API 启动时会自动按文件名顺序执行 `apps/api/migrations` 下尚未应用的 SQL，无需再手动运行迁移命令。
