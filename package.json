@@ -18,11 +18,12 @@
     "test:admin:coverage": "npm --workspace apps/admin run test:coverage",
     "test:web": "npm --workspace apps/web run test",
     "test:web:coverage": "npm --workspace apps/web run test:coverage",
+    "test:scripts": "./scripts/test-db-backup.sh",
     "build:api": "cd apps/api && go build ./cmd/server",
     "test:api": "cd apps/api && go test ./...",
     "vet:api": "cd apps/api && go vet ./...",
     "verify:frontend": "npm run test:admin:coverage && npm run test:web:coverage && npm run build:web && npm run build:admin",
-    "verify": "npm run verify:frontend && npm run vet:api && npm run test:api && npm run build:api",
+    "verify": "npm run test:scripts && npm run verify:frontend && npm run vet:api && npm run test:api && npm run build:api",
     "release:check": "./scripts/release-check.sh"
   }
 }

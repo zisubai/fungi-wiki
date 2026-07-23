@@ -12,6 +12,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  operations:
+    name: Operational script tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Test database backup retention
+        run: ./scripts/test-db-backup.sh
+
   frontend:
     name: Frontend tests and builds
     runs-on: ubuntu-latest
