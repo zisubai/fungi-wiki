@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:17-alpine
+    container_name: fungi-wiki-postgres
     environment:
       POSTGRES_DB: fungi_wiki
       POSTGRES_USER: fungi

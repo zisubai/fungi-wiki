@@ -1,0 +1,9 @@
+[Unit]
+Description=Fungi Wiki PostgreSQL backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/fungi-wiki
+Environment=POSTGRES_CONTAINER=fungi-wiki-postgres
+Environment=BACKUP_KEEP_COUNT=14
+ExecStart=%h/fungi-wiki/scripts/db-backup.sh

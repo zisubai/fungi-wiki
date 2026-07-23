@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Fungi Wiki PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+Persistent=true
+RandomizedDelaySec=15m
+Unit=fungi-wiki-backup.service
+
+[Install]
+WantedBy=timers.target
+
